@@ -1,0 +1,11 @@
+# Ignorar cache do RedM
+server-data/cache/
+
+# Ignorar pasta server-files inteira
+server-files/
+server-data/resources/[standalone]
+
+# chat-redm (os colchetes precisam de \ para valer como nome de pasta)
+server-data/resources/\[standalone\]/chat-redm/
+
+txData
