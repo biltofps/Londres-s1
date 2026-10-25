@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bilto Farming</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Rye&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <section id="plant" class="ledger hidden">
+        <header class="ledger-top">
+            <div class="stamp">
+                <img id="pImg" alt="" />
+                <svg class="stamp-fallback" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 21v-8" />
+                    <path d="M12 13c0-4 3-7 7-7 0 4-3 7-7 7z" />
+                    <path d="M12 15c0-3-2.5-5.5-6-5.5 0 3 2.5 5.5 6 5.5z" />
+                </svg>
+            </div>
+            <div class="title-block">
+                <span class="eyebrow" id="pOwner">Sua plantação</span>
+                <h1 id="pName">Planta</h1>
+                <div class="level">
+                    <span>Nível <b id="pLevel">0</b></span>
+                    <div class="level-track"><i id="pLevelBar"></i></div>
+                </div>
+            </div>
+        </header>
+
+        <div class="growth">
+            <div class="ring">
+                <svg viewBox="0 0 120 120">
+                    <circle class="ring-bg" cx="60" cy="60" r="52" />
+                    <circle class="ring-fg" id="pRing" cx="60" cy="60" r="52" />
+                </svg>
+                <div class="ring-center">
+                    <strong id="pTime">--</strong>
+                    <span id="pUnit">min</span>
+                </div>
+            </div>
+            <div class="growth-info">
+                <span class="phase" id="pPhase">Crescendo</span>
+                <p id="pHint">Cuide da planta para ela crescer.</p>
+                <span class="pct"><b id="pPct">0</b>% crescido</span>
+            </div>
+        </div>
+
+        <div class="tiles">
+            <div class="tile" id="tWater" data-kind="water">
+                <svg viewBox="0 0 24 24"><path d="M12 3c-3 4-6 7-6 10a6 6 0 0 0 12 0c0-3-3-6-6-10z" /></svg>
+                <div><span>Água</span><b>--</b></div>
+            </div>
+            <div class="tile" id="tFert" data-kind="fert">
+                <svg viewBox="0 0 24 24"><path d="M5 20h14" /><path d="M7 20l1.5-9h7L17 20" /><path d="M9 11c0-3 1-5 3-6 2 1 3 3 3 6" /></svg>
+                <div><span>Adubo</span><b>--</b></div>
+            </div>
+            <div class="tile" id="tTrim" data-kind="trim">
+                <svg viewBox="0 0 24 24"><circle cx="6.5" cy="17.5" r="2.5" /><circle cx="17.5" cy="17.5" r="2.5" /><path d="M8.3 15.7L18 4" /><path d="M15.7 15.7L6 4" /></svg>
+                <div><span>Poda</span><b>--</b></div>
+            </div>
+            <div class="tile" id="tHealth" data-kind="health">
+                <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" /></svg>
+                <div><span>Saúde</span><b>--</b></div>
+                <i class="tile-bar"><em id="tHealthBar"></em></i>
+            </div>
+        </div>
+    </section>
+
+    <aside id="wagon" class="wagon hidden">
+        <svg viewBox="0 0 24 24" class="wagon-icon"><path d="M3 9h14v6H3z" /><path d="M17 11h3l1 4h-4" /><circle cx="7" cy="18" r="2" /><circle cx="16" cy="18" r="2" /></svg>
+        <div class="wagon-body">
+            <div class="wagon-head"><span>Carroça d'água</span><b id="wValue">--</b></div>
+            <div class="wagon-track"><i id="wBar"></i></div>
+        </div>
+    </aside>
+
+    <aside id="zonetool" class="zonetool hidden">
+        <div class="zt-head">
+            <span class="eyebrow">Criando zona</span>
+            <h2 id="ztName">Nova zona</h2>
+        </div>
+        <div class="zt-stats">
+            <div><b id="ztPoints">0</b><span>pontos</span></div>
+            <div><b id="ztHeight">15</b><span>altura (m)</span></div>
+        </div>
+        <ul class="zt-keys">
+            <li><kbd>G</kbd> Adicionar ponto</li>
+            <li><kbd>DEL</kbd> Desfazer ponto</li>
+            <li><kbd>↑</kbd><kbd>↓</kbd> Altura</li>
+            <li><kbd>ENTER</kbd> Finalizar</li>
+            <li><kbd>/farmzona</kbd> Cancelar</li>
+        </ul>
+    </aside>
+
+    <script src="app.js"></script>
+</body>
+</html>
