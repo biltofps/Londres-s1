@@ -1,18 +1,21 @@
 Config = {}
 
-Config.AutoDatabase     = true         -- create tables automatically on start (false = import installation/rsg_banking.sql)
-Config.OpenKey          = 'J'          -- RSGCore.Shared.Keybinds key
+Config.OpenKey           = 'J'        -- RSGCore.Shared.Keybinds key
 Config.ServerMaxDistance = 5.0        -- max distance from the bank for any transaction (server checked)
-Config.Cooldown         = 500          -- ms between bank requests per player (anti-spam)
-Config.MaxTransaction   = 100000       -- per single deposit/withdraw/transfer
-Config.HistoryLimit     = 15           -- transactions shown in the ledger
-Config.HistoryDays      = 30           -- delete ledger entries older than this on start (0 = keep forever)
+Config.Cooldown          = 500        -- ms between bank requests per player (anti-spam)
+Config.MaxTransaction    = 100000     -- per single deposit/withdraw/transfer
 
--- Accounts must be opened at each branch before it can be used
-Config.AccountOpenFee   = 5            -- cash fee to open an account (0 = free)
+-- Accounts: a player must open an account at each bank before using it.
+-- Any bank in Config.Banks can override openFee / maintenanceFee with its own value.
+Config.Account = {
+    openFee         = 25,   -- cash paid to open an account (0 = free)
+    maintenanceFee  = 5,    -- taken from that bank's balance every maintenanceDays (0 = off)
+    maintenanceDays = 7,    -- real days between maintenance charges
+    checkMinutes    = 30,   -- how often the server looks for accounts with maintenance due
+}
 
 -- Opening hours (in-game clock). Set Config.UseHours = false for 24/7 banks
-Config.UseHours  = true
+Config.UseHours  = false
 Config.OpenHour  = 7
 Config.CloseHour = 21
 
@@ -26,57 +29,6 @@ Config.Closing = {
 -- Add `exit = vector4(x, y, z, heading)` to a bank below (a spot on the street outside its front door)
 -- to enable escorting for that bank. Banks without an exit just keep their doors usable from inside.
 
--- Home branch: paychecks (and anything paid into RSG-Core 'bank' money) go here.
--- The first account a player opens becomes their home; they can change it at any counter.
-Config.DefaultHomeBank  = 'valentine'  -- used by the migration for players with no accounts yet
-Config.ForwardCoreBank  = true         -- move money other scripts add to RSG-Core 'bank' into the home branch
-Config.MigrateCoreMoney = true         -- one-off: move old bank/valbank/rhobank/blkbank/armbank money into branches
-
--- Wiring money between branches
-Config.TransferFeePercent = 5          -- % fee charged on branch-to-branch wires
-Config.TransferMinFee     = 1          -- minimum fee in $
-
--- Loans: borrow money from a branch. The loan is paid into that branch account
--- and must be repaid (from the branch vault or cash) at the same branch.
-Config.Loans = {
-    enabled         = true,
-    minAmount       = 50,
-    maxAmount       = 2000,      -- largest single loan
-    interestPercent = 10,        -- flat interest added when the loan is taken ($1000 -> owe $1100)
-    termDays        = 7,         -- real days to repay
-    maxActive       = 1,         -- loans a player may have open across ALL branches
-    minAccountHours = 0,         -- account must be at least this many real hours old (0 = off)
-    latePenaltyPercent = 10,     -- added once when the loan goes overdue
-    autoCollect     = true,      -- overdue loans are collected from the player's branch balances automatically
-    checkInterval   = 10,        -- minutes between overdue checks
-}
-
--- Vault lockboxes: rent a safe-deposit box at a branch to store whitelisted items.
--- Capacity is total item count (e.g. 25 = 25 gold bars).
-Config.Lockbox = {
-    enabled = true,
-    sizes = {
-        small  = { label = 'Small Lockbox',  capacity = 25,  price = 50  },
-        medium = { label = 'Medium Lockbox', capacity = 50,  price = 150 },
-        large  = { label = 'Large Lockbox',  capacity = 100, price = 300 },
-    },
-    -- Only the SMALL lockbox can be enlarged, one step at a time, for an extra fee
-    upgrade = {
-        size     = 'small',
-        step     = 10,           -- capacity added per upgrade
-        price    = 40,           -- fee per upgrade
-        maxSteps = 3,            -- small 25 -> 55 max
-    },
-    payWith = 'bank',            -- 'bank' = paid from this branch vault, 'cash' = paid in cash
-    -- Items allowed in a lockbox (anything not listed is refused)
-    items = {
-        resource_gold_bar = true,
-        -- resource_silver_bar = true,
-        -- gold_nugget = true,
-    },
-    imagePath = 'nui://rsg-inventory/html/images/', -- where item images are loaded from
-}
-
 -- Blip
 Config.Blip = {
     enabled = true,
@@ -87,31 +39,54 @@ Config.Blip = {
     updateInterval = 10000,                     -- ms between open/closed checks
 }
 
--- Each bank is its own institution: money deposited here stays here.
+-- Each bank is a RSG-Core money type (same list as bilto_admin Config.MoneyTypes).
+-- Money deposited at a bank stays in that bank: it can only be withdrawn there.
+-- Shown in the menu: monogram, motto, founding year, branch code and the teller who greets new customers.
 Config.Banks = {
-    valentine = {
-        label  = 'Valentine Bank',
-        coords = vector3(-308.58, 776.07, 118.70),
+    valbank = {
+        label    = 'Valentine Bank',
+        coords   = vector3(-308.58, 776.07, 118.70),
+        monogram = 'V',
+        motto    = 'Confiança do criador ao vaqueiro',
+        founded  = 1874,
+        code     = '0417',
+        teller   = 'Sr. Walter Hughes',
     },
-    rhodes = {
-        label  = 'Rhodes Bank',
-        coords = vector3(1292.307, -1301.539, 77.04012),
+    armbank = {
+        label    = 'Armadillo Bank',
+        coords   = vector3(-3666.25, -2626.57, -13.59),
+        monogram = 'A',
+        motto    = 'Firme como o deserto',
+        founded  = 1881,
+        code     = '0923',
+        teller   = 'Sr. Ezekiel Parr',
     },
-    saintdenis = {
-        label  = 'Saint Denis Bank',
-        coords = vector3(2644.579, -1292.313, 52.24956),
+    rhobank = {
+        label    = 'Rhodes Bank',
+        coords   = vector3(1292.307, -1301.539, 77.04012),
+        monogram = 'R',
+        motto    = 'Tradição sulista desde 1866',
+        founded  = 1866,
+        code     = '0352',
+        teller   = 'Sra. Abigail Gray',
     },
-    blackwater = {
-        label  = 'Blackwater Bank',
-        coords = vector3(-813.1633, -1277.486, 43.63771),
+    blkbank = {
+        label    = 'Blackwater Bank',
+        coords   = vector3(-813.1633, -1277.486, 43.63771),
+        monogram = 'B',
+        motto    = 'O futuro passa por aqui',
+        founded  = 1879,
+        code     = '0688',
+        teller   = 'Sr. Theodore Finch',
     },
-    armadillo = {
-        label  = 'Armadillo Bank',
-        coords = vector3(-3666.25, -2626.57, -13.59),
-    },
-    strawberry = {
-        label  = 'Strawberry Bank',
-        coords = vector3(-1752.21, -383.27, 156.53),
+    bank = {
+        label    = 'Saint Denis Bank',
+        coords   = vector3(2644.579, -1292.313, 52.24956),
+        monogram = 'SD',
+        motto    = 'A instituição da capital',
+        founded  = 1858,
+        code     = '0001',
+        teller   = 'Sr. Archibald Pembrook',
     },
 }
 

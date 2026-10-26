@@ -1,156 +1,101 @@
 -----------------------------------------------------------------------
--- Automatic database setup
--- Creates the banking tables on resource start if they don't exist.
--- Disable with Config.AutoDatabase = false and import
--- installation/rsg_banking.sql manually instead.
+-- Database setup
+--  * rsg_bank_opened: which citizen has an account at which bank
+--    (balances themselves live in RSG-Core money types)
+--  * one-off migration from rsg-banking v3 (rsg_bank_accounts table):
+--    the old table is renamed to rsg_bank_accounts_old first, so this only
+--    ever runs once and the original balances stay as a backup
 -----------------------------------------------------------------------
+local RSGCore = exports['rsg-core']:GetCoreObject()
+
 BankingDBReady = false
 
-local tables = {
-    {
-        name = 'rsg_bank_accounts',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_accounts` (
-                `id` INT(11) NOT NULL AUTO_INCREMENT,
-                `citizenid` VARCHAR(50) NOT NULL,
-                `bank` VARCHAR(50) NOT NULL,
-                `balance` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                UNIQUE KEY `citizen_bank` (`citizenid`, `bank`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
-    {
-        name = 'rsg_bank_transactions',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_transactions` (
-                `id` INT(11) NOT NULL AUTO_INCREMENT,
-                `citizenid` VARCHAR(50) NOT NULL,
-                `bank` VARCHAR(50) NOT NULL,
-                `type` VARCHAR(20) NOT NULL,
-                `amount` DECIMAL(12,2) NOT NULL,
-                `note` VARCHAR(255) DEFAULT NULL,
-                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                KEY `citizen_bank_idx` (`citizenid`, `bank`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
-    {
-        name = 'rsg_bank_home',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_home` (
-                `citizenid` VARCHAR(50) NOT NULL,
-                `bank` VARCHAR(50) NOT NULL,
-                PRIMARY KEY (`citizenid`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
-    {
-        name = 'rsg_bank_meta',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_meta` (
-                `k` VARCHAR(50) NOT NULL,
-                `v` VARCHAR(255) DEFAULT NULL,
-                PRIMARY KEY (`k`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
-    {
-        name = 'rsg_bank_loans',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_loans` (
-                `id` INT(11) NOT NULL AUTO_INCREMENT,
-                `citizenid` VARCHAR(50) NOT NULL,
-                `bank` VARCHAR(50) NOT NULL,
-                `principal` DECIMAL(12,2) NOT NULL,
-                `owed` DECIMAL(12,2) NOT NULL,
-                `due_at` TIMESTAMP NOT NULL,
-                `late` TINYINT(1) NOT NULL DEFAULT 0,
-                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`id`),
-                UNIQUE KEY `citizen_bank` (`citizenid`, `bank`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
-    {
-        name = 'rsg_bank_lockboxes',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_lockboxes` (
-                `citizenid` VARCHAR(50) NOT NULL,
-                `bank` VARCHAR(50) NOT NULL,
-                `size` VARCHAR(20) NOT NULL,
-                `upgrades` INT(11) NOT NULL DEFAULT 0,
-                `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (`citizenid`, `bank`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
-    {
-        name = 'rsg_bank_lockbox_items',
-        sql = [[
-            CREATE TABLE IF NOT EXISTS `rsg_bank_lockbox_items` (
-                `citizenid` VARCHAR(50) NOT NULL,
-                `bank` VARCHAR(50) NOT NULL,
-                `item` VARCHAR(100) NOT NULL,
-                `amount` INT(11) NOT NULL DEFAULT 0,
-                PRIMARY KEY (`citizenid`, `bank`, `item`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-        ]]
-    },
+-- old branch id -> money type
+local LEGACY = {
+    valentine  = 'valbank',
+    strawberry = 'valbank',
+    armadillo  = 'armbank',
+    rhodes     = 'rhobank',
+    blackwater = 'blkbank',
+    saintdenis = 'bank',
 }
-
-local function log(color, msg)
-    print(('[rsg-banking]%s %s^7'):format(color, msg))
-end
 
 local function tableExists(name)
     return (MySQL.scalar.await(
         'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', { name }) or 0) > 0
 end
 
-local function pruneHistory()
-    local days = tonumber(Config.HistoryDays) or 0
-    if days <= 0 then return end
-    MySQL.update('DELETE FROM rsg_bank_transactions WHERE created_at < (NOW() - INTERVAL ? DAY)', { days }, function(n)
-        if n and n > 0 then log('^3', ('Pruned %s old ledger entries'):format(n)) end
-    end)
+---Runs once, when rsg_bank_opened is first created: characters that already hold
+---money in a bank get that account opened for free, so nobody's money is locked.
+local function openExistingBalances()
+    local n = 0
+    for _, row in ipairs(MySQL.query.await('SELECT citizenid, money FROM players') or {}) do
+        local money = json.decode(row.money or '{}') or {}
+        for bankId in pairs(Config.Banks) do
+            if (tonumber(money[bankId]) or 0) > 0 then
+                MySQL.update.await('INSERT IGNORE INTO rsg_bank_opened (citizenid, bank) VALUES (?, ?)', { row.citizenid, bankId })
+                n = n + 1
+            end
+        end
+    end
+    print(('[rsg-banking] ^2Opened %s accounts for characters with existing balances^7'):format(n))
+end
+
+local function createTables()
+    local isNew = not tableExists('rsg_bank_opened')
+    MySQL.query.await([[
+        CREATE TABLE IF NOT EXISTS `rsg_bank_opened` (
+            `citizenid` VARCHAR(50) NOT NULL,
+            `bank` VARCHAR(50) NOT NULL,
+            `opened_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `last_fee_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`citizenid`, `bank`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    ]])
+    if isNew then openExistingBalances() end
+end
+
+local function migrate()
+    if not tableExists('rsg_bank_accounts') or tableExists('rsg_bank_accounts_old') then return end
+    MySQL.query.await('RENAME TABLE rsg_bank_accounts TO rsg_bank_accounts_old')
+
+    local rows = MySQL.query.await('SELECT citizenid, bank, balance FROM rsg_bank_accounts_old') or {}
+    local total, count = 0, 0
+    for _, row in ipairs(rows) do
+        local moneyType = LEGACY[row.bank] or 'bank'
+        local amount = tonumber(row.balance) or 0
+        -- old accounts stay open (free) at the matching bank
+        MySQL.update.await('INSERT IGNORE INTO rsg_bank_opened (citizenid, bank) VALUES (?, ?)', { row.citizenid, moneyType })
+        if amount > 0 then
+            local Player = RSGCore.Functions.GetPlayerByCitizenId(row.citizenid)
+            local ok
+            if Player then
+                ok = Player.Functions.AddMoney(moneyType, amount, 'bank-migration')
+            else
+                ok = CreditOffline(row.citizenid, moneyType, amount)
+            end
+            if ok then
+                total, count = total + amount, count + 1
+            else
+                print(('[rsg-banking] ^1migration: could not move $%.2f (%s) for %s^7'):format(amount, row.bank, row.citizenid))
+            end
+        end
+    end
+    print(('[rsg-banking] ^2Migration done: $%.2f moved from %s old branch accounts^7'):format(total, count))
+    BankLog('system', nil, {
+        { name = 'Accounts', value = tostring(count), inline = true },
+        { name = 'Total moved', value = BankMoney(total), inline = true },
+    }, { description = 'Old branch accounts migrated to RSG-Core money types' })
 end
 
 MySQL.ready(function()
-    if not Config.AutoDatabase then
-        local missing = {}
-        for _, t in ipairs(tables) do
-            if not tableExists(t.name) then missing[#missing + 1] = t.name end
-        end
-        if #missing > 0 then
-            BankLog('system', nil, { { name = 'Missing Tables', value = table.concat(missing, ', ') } }, { description = 'Database tables missing' })
-            log('^1', ('Missing tables: %s. Import installation/rsg_banking.sql or set Config.AutoDatabase = true'):format(table.concat(missing, ', ')))
-            return
-        end
-        BankingDBReady = true
-        pruneHistory()
+    local ok, err = pcall(createTables)
+    if not ok then
+        print(('[rsg-banking] ^1Database setup failed:^7 %s'):format(err))
         return
     end
-
-    local ok, err = pcall(function()
-        for _, t in ipairs(tables) do
-            if not tableExists(t.name) then
-                MySQL.query.await(t.sql)
-                log('^2', ('Created table %s'):format(t.name))
-            end
-        end
-    end)
-
-    if ok then
-        BankingDBReady = true
-        log('^2', 'Database ready')
-        BankLog('system', nil, nil, { description = 'Resource started - database ready' })
-        pruneHistory()
-    else
-        log('^1', ('Automatic database setup failed: %s'):format(err))
-        log('^1', 'Import installation/rsg_banking.sql manually.')
-        BankLog('system', nil, { { name = 'Error', value = tostring(err) } }, { description = 'Automatic database setup FAILED' })
-    end
+    BankingDBReady = true
+    print('[rsg-banking] ^2Database ready^7')
+    ok, err = pcall(migrate)
+    if not ok then print(('[rsg-banking] ^1Migration failed:^7 %s'):format(err)) end
 end)

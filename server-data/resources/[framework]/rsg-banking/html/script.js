@@ -1,254 +1,312 @@
 const RES = typeof GetParentResourceName === 'function' ? GetParentResourceName() : 'rsg-banking';
 const $ = id => document.getElementById(id);
-let state = null, busy = false;
+let state = null, busy = false, page = 'deposit', pendingTransfer = null;
+let gameHour = 12, typing = null;
+// account just opened: the form stays on screen (stamp + receipt) until "go to my account"
+let entering = false;
 
 const fmt = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const round2 = n => Math.round(n * 100) / 100;
 let L = {};
 // translate: t('key', a, b) replaces each %s in order
 const t = (k, ...a) => { let i = 0; return String(L[k] ?? k).replace(/%s/g, () => a[i++] ?? ''); };
 function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => el.placeholder = t(el.dataset.i18nPh));
-  document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.dataset.i18nTitle));
 }
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
 function post(name, body = {}) {
   return fetch(`https://${RES}/${name}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => {});
 }
 
-function setTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  ['vault', 'wire', 'branches', 'ledger', 'loans', 'lockbox'].forEach(t => $('tab-' + t).classList.toggle('hidden', t !== tab));
+function applyScale() {
+  const fit = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  document.documentElement.style.setProperty('--ui-scale', Math.max(0.55, Math.min(2.5, fit)).toFixed(3));
 }
+window.addEventListener('resize', applyScale);
+applyScale();
 
-function calcFee() {
-  if (!state) return;
-  const a = parseFloat($('wireAmount').value) || 0;
-  const fee = a > 0 ? Math.max(state.minFee, Math.round(a * state.feePercent) / 100) : 0;
-  $('feeInfo').textContent = t('ui_fee_info', state.feePercent, fmt(fee), fmt(a + fee));
-}
-
-const TX = {
-  deposit:  { icon: '&#8595;',  label: 'ui_tx_deposit',  sign: 1 },
-  withdraw: { icon: '&#8593;',  label: 'ui_tx_withdraw', sign: -1 },
-  wire_in:  { icon: '&#8618;',  label: 'ui_tx_wire_in',  sign: 1 },
-  wire_out: { icon: '&#8617;',  label: 'ui_tx_wire_out', sign: -1 },
-  opened:   { icon: '&#10022;', label: 'ui_tx_opened',   sign: -1 },
-  loan:         { icon: '&#9878;',  label: 'ui_tx_loan',         sign: 1 },
-  loan_payment: { icon: '&#9878;',  label: 'ui_tx_loan_payment', sign: -1 },
-  loan_late:    { icon: '&#9888;',  label: 'ui_tx_loan_late',    sign: 0 },
-  lockbox:      { icon: '&#128274;', label: 'ui_tx_lockbox',     sign: -1 },
-  lockbox_up:   { icon: '&#128274;', label: 'ui_tx_lockbox_up',  sign: -1 },
+// bank / cash: what happens to the bank balance and to cash on hand
+const PAGES = {
+  deposit:  { title: 'ui_tab_deposit',  desc: 'ui_deposit_desc',  button: 'ui_deposit',  bank: 1,  cash: -1, all: () => state.cash },
+  withdraw: { title: 'ui_tab_withdraw', desc: 'ui_withdraw_desc', button: 'ui_withdraw', bank: -1, cash: 1,  all: () => state.balance },
+  transfer: { title: 'ui_tab_transfer', desc: 'ui_transfer_desc', button: 'ui_transfer', bank: -1, cash: 0,  all: () => state.balance },
 };
 
-const fmtDate = ts => ts ? new Date(ts * 1000).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+const maintText = d => d.maintFee > 0 ? t('ui_maint_every', fmt(d.maintFee), d.maintDays) : t('ui_free');
 
-function loanRepayInfo() {
-  const l = state && state.loan; if (!l) return;
-  const a = parseFloat($('loanAmount').value) || 0;
-  $('loanRepayInfo').textContent = a > 0 ? t('ui_loan_repay_total', fmt(Math.round(a * (100 + l.interest)) / 100)) : '';
+/* ------------------------------------------------------------------ entrada (sem conta) */
+function updateOpenButton() {
+  if (!state) return;
+  const signed = $('w-terms').checked;
+  $('w-signature').classList.toggle('signed', signed);
+  $('open-btn').disabled = busy || !signed || state.cash < state.openFee;
 }
 
-function renderLoans(l) {
-  $('loansTabBtn').classList.toggle('hidden', !l);
-  if (!l) return;
-  const a = l.active;
-  $('loanActive').classList.toggle('hidden', !a);
-  $('loanNew').classList.toggle('hidden', !!a || !!l.blocked);
-  $('loanBlocked').classList.toggle('hidden', !!a || !l.blocked);
-  if (a) {
-    $('loanOwed').textContent = fmt(a.owed);
-    const late = a.late || a.due < l.now;
-    $('loanDue').textContent = late ? t('ui_loan_overdue') : t('ui_loan_due', fmtDate(a.due)) + ' · ' + t('ui_loan_borrowed', fmt(a.principal));
-    $('loanDue').classList.toggle('late', late);
-  } else if (l.blocked) {
-    $('loanBlockedText').textContent = l.blocked === 'age' ? t('ui_loan_age', l.minHours) : (l.elsewhere && l.elsewhere.length ? t('ui_loan_limit_at', l.elsewhere.join(', ')) : t('ui_loan_limit'));
-  } else {
-    $('loanTerms').textContent = t('ui_loan_terms', l.interest, l.termDays, fmt(l.min), fmt(l.max));
-    loanRepayInfo();
+// greeting follows the in-game clock
+function greeting(name) {
+  const key = gameHour >= 5 && gameHour < 12 ? 'ui_greet_morning' : gameHour >= 12 && gameHour < 18 ? 'ui_greet_afternoon' : 'ui_greet_evening';
+  return t(key, name || '—');
+}
+
+// types the greeting letter by letter after the seal lands
+function typeGreeting(text) {
+  clearInterval(typing);
+  const el = $('w-greet'), box = el.parentElement;
+  el.textContent = '';
+  box.classList.remove('done');
+  let i = 0;
+  setTimeout(() => {
+    typing = setInterval(() => {
+      el.textContent = text.slice(0, ++i);
+      if (i >= text.length) { clearInterval(typing); box.classList.add('done'); }
+    }, 38);
+  }, 650);
+}
+
+function renderWelcome(d, fresh) {
+  $('w-monogram').textContent = d.monogram || d.label[0];
+  $('w-label').textContent = d.label;
+  $('w-founded').textContent = d.founded ? t('ui_founded', d.founded) : '';
+  $('w-motto').textContent = d.motto ? `“${d.motto}”` : '';
+  $('w-teller').textContent = d.teller ? t('ui_teller', d.teller) : '';
+  $('w-desc').textContent = t('ui_open_desc', d.label);
+  $('w-name').textContent = d.name || '—';
+  $('w-cid').textContent = d.citizenid || '—';
+  $('w-branch').textContent = d.code || '—';
+  $('w-fee').textContent = d.openFee > 0 ? fmt(d.openFee) : t('ui_free');
+  $('w-maint').textContent = maintText(d);
+  $('w-cash').textContent = fmt(d.cash);
+  $('w-cash').classList.toggle('over', d.cash < d.openFee);
+  const missing = round2(d.openFee - d.cash);
+  $('w-missing-row').classList.toggle('hidden', missing <= 0);
+  $('w-missing-row').firstElementChild.textContent = t('ui_missing', '');
+  $('w-missing').textContent = fmt(missing);
+  $('w-terms-text').textContent = t('ui_terms', maintText(d));
+  $('w-sign').textContent = d.name || '';
+  $('w-approved-bank').textContent = d.label;
+  if (fresh) {
+    $('w-sheet-no').textContent = t('ui_sheet_no', `${d.code || '0000'}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`);
+    $('w-date').textContent = new Date().toLocaleDateString();
+    typeGreeting(greeting(d.name));
   }
+  updateOpenButton();
 }
 
-const itemImg = (b, it) => `<img class="item-img" src="${esc((b.imagePath || '') + it.image)}" onerror="this.style.visibility='hidden'">`;
-
-function renderLockbox(b) {
-  $('lockboxTabBtn').classList.toggle('hidden', !b);
-  if (!b) return;
-  const box = b.box;
-  $('boxShop').classList.toggle('hidden', !!box);
-  $('boxOwned').classList.toggle('hidden', !box);
-  if (!box) {
-    $('boxAccepts').textContent = t('ui_lockbox_accepts', b.allowed.join(', '));
-    $('boxPayNote').textContent = b.payWith === 'cash' ? t('ui_paid_cash') : t('ui_paid_from_vault');
-    $('boxSizes').innerHTML = b.sizes.map(s => `
-      <div class="row">
-        <div class="badge">&#128274;</div>
-        <div class="row-main"><div class="row-title">${esc(s.label)}</div><div class="row-sub">${esc(t('ui_lockbox_capacity', s.capacity))}</div></div>
-        <div class="amt">${fmt(s.price)}</div>
-        <button class="wood-btn small-btn rent-btn" data-size="${esc(s.id)}">${esc(t('ui_rent'))}</button>
-      </div>`).join('');
-    document.querySelectorAll('.rent-btn').forEach(x => x.onclick = () => act('buyLockbox', { size: x.dataset.size }));
-    return;
-  }
-  $('boxLabel').textContent = box.label;
-  $('boxUsed').textContent = t('ui_lockbox_used', box.used, box.capacity);
-  const pct = box.capacity > 0 ? Math.min(100, box.used / box.capacity * 100) : 100;
-  $('boxMeter').style.width = pct + '%';
-  $('boxMeter').classList.toggle('full', pct >= 100);
-  const upBtn = $('boxUpgradeBtn');
-  const isUpSize = box.maxUpgrades > 0 && (box.canUpgrade || box.upgrades > 0);
-  upBtn.classList.toggle('hidden', !isUpSize);
-  upBtn.textContent = box.canUpgrade ? t('ui_enlarge', box.upgradeStep, fmt(box.upgradePrice)) : t('ui_lockbox_maxed');
-  upBtn.dataset.locked = box.canUpgrade ? '' : '1';
-  upBtn.onclick = () => { if (box.canUpgrade) act('upgradeLockbox', {}); };
-
-  $('boxStored').innerHTML = box.items.length ? box.items.map(it => `
-    <div class="row">${itemImg(b, it)}
-      <div class="row-main"><div class="row-title">${esc(it.label)}</div></div>
-      <div class="amt">x${it.amount}</div>
-      <button class="wood-btn small-btn box-take" data-item="${esc(it.name)}" data-max="${it.amount}">${esc(t('ui_take'))}</button>
-    </div>`).join('') : `<div class="empty">${esc(t('ui_lockbox_empty'))}</div>`;
-  $('boxCarry').innerHTML = b.carry.length ? b.carry.map(it => `
-    <div class="row">${itemImg(b, it)}
-      <div class="row-main"><div class="row-title">${esc(it.label)}</div></div>
-      <div class="amt">x${it.amount}</div>
-      <button class="wood-btn small-btn box-store" data-item="${esc(it.name)}" data-max="${it.amount}">${esc(t('ui_store'))}</button>
-    </div>`).join('') : `<div class="empty">${esc(t('ui_nothing_to_store'))}</div>`;
-
-  const qty = max => { const q = parseInt($('boxQty').value, 10); return q > 0 ? q : max; };
-  document.querySelectorAll('.box-take').forEach(x => x.onclick = () =>
-    act('lockboxWithdraw', { item: x.dataset.item, qty: qty(+x.dataset.max) }));
-  document.querySelectorAll('.box-store').forEach(x => x.onclick = () =>
-    act('lockboxDeposit', { item: x.dataset.item, qty: Math.min(qty(+x.dataset.max), Math.max(0, box.capacity - box.used)) || qty(+x.dataset.max) }));
+/* ------------------------------------------------------------------ banco completo */
+function setPage(name) {
+  page = name;
+  const p = PAGES[name];
+  document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.toggle('active', n.dataset.page === name));
+  $('page-title').textContent = t(p.title);
+  $('desc').textContent = t(p.desc);
+  $('submit').textContent = t(p.button);
+  $('target-field').classList.toggle('hidden', name !== 'transfer');
+  $('sum-cash-row').classList.toggle('hidden', !p.cash);
+  $('amount').value = '';
+  updateSummary();
+  if (state && state.hasAccount) (name === 'transfer' ? $('target') : $('amount')).focus();
 }
 
-function render(d) {
-  state = d;
-  $('bankLabel').textContent = d.label;
-  $('customer').textContent = d.name || t('ui_customer');
+function amountValue() {
+  const v = parseFloat($('amount').value);
+  return v > 0 ? round2(v) : 0;
+}
+
+function updateSummary() {
+  if (!state || !state.hasAccount) return;
+  const p = PAGES[page];
+  const a = amountValue();
+  const after = round2(state.balance + p.bank * a);
+  const cashAfter = round2(state.cash + p.cash * a);
+  $('sum-balance').textContent = fmt(state.balance);
+  $('sum-amount').textContent = (a ? (p.bank < 0 ? '- ' : '+ ') : '') + fmt(a);
+  $('sum-after').textContent = fmt(after);
+  $('sum-cash').textContent = fmt(cashAfter);
+  $('sum-after').classList.toggle('over', after < 0);
+  $('sum-cash').classList.toggle('over', cashAfter < 0);
+  const source = p.bank < 0 ? state.balance : state.cash;
+  $('submit').disabled = busy || !a || a > source || a > state.max || (page === 'transfer' && !$('target').value.trim());
+}
+
+function renderBank(d) {
+  $('monogram').textContent = d.monogram || d.label[0];
+  $('bank-label').textContent = d.label;
+  $('founded').textContent = d.founded ? t('ui_founded', d.founded) : '';
+  $('motto').textContent = d.motto ? `“${d.motto}”` : '';
+  $('customer').textContent = d.name || '—';
+  $('cid').textContent = d.citizenid || '—';
+  $('branch').textContent = d.code || '—';
+  $('maint').textContent = maintText(d);
+  $('page-title').textContent = t(PAGES[page].title);
+  $('page-sub').textContent = d.nextFee && d.maintFee > 0
+    ? t('ui_maint_next', fmt(d.maintFee), new Date(d.nextFee * 1000).toLocaleDateString())
+    : '';
   $('balance').textContent = fmt(d.balance);
   $('cash').textContent = fmt(d.cash);
-  $('openView').classList.toggle('hidden', !!d.hasAccount);
-  $('mainView').classList.toggle('hidden', !d.hasAccount);
-  $('openFee').textContent = d.openFee > 0 ? t('ui_opening_fee', fmt(d.openFee), fmt(d.cash)) : t('ui_free_to_open');
-  const canAfford = (d.cash || 0) >= (d.openFee || 0);
-  $('openFee').classList.toggle('afford', canAfford);
-  $('openFee').classList.toggle('no-afford', !canAfford);
-  $('openBtn').disabled = !canAfford;
-
-  const others = d.branches.filter(b => b.id !== d.bankId && b.open);
-  $('wireEmpty').classList.toggle('hidden', others.length > 0);
-  $('wireForm').classList.toggle('hidden', others.length === 0);
-  const sel = $('wireTarget'), prev = sel.value;
-  sel.innerHTML = others
-    .map(b => `<option value="${esc(b.id)}">${esc(b.label)} — ${fmt(b.balance)}</option>`).join('');
-  if (prev && others.some(b => b.id === prev)) sel.value = prev;
-
-  $('branchList').innerHTML = d.branches.map(b => `
-    <div class="row">
-      <div class="badge">&#127974;</div>
-      <div class="row-main"><div class="row-title">${esc(b.label)}</div>
-        <div class="row-sub ${b.open ? '' : 'closed'}">${!b.open ? t('ui_branch_no_account') : b.id === d.bankId ? t('ui_branch_here') : t('ui_branch_visit')}</div></div>
-      ${b.id === d.homeBank ? `<span class="pill">${esc(t('ui_pill_home'))}</span>` : ''}
-      ${b.id === d.bankId ? `<span class="pill">${esc(t('ui_pill_here'))}</span>` : ''}
-      ${b.id === d.bankId && b.open && b.id !== d.homeBank ? `<button class="wood-btn home-btn" title="${esc(t('ui_home_hint'))}">${esc(t('ui_make_home'))}</button>` : ''}
-      <div class="amt ${b.balance > 0 ? 'pos' : ''}">${fmt(b.balance)}</div>
-    </div>`).join('');
-  document.querySelectorAll('.home-btn').forEach(b => b.onclick = () => act('setHome', {}));
-
-  $('ledgerList').innerHTML = d.history.length ? d.history.map(h => {
-    const tx = TX[h.type] || { icon: '&#8226;', label: h.type, sign: 1 };
-    const date = h.ts ? new Date(h.ts * 1000).toLocaleDateString() : '';
-    return `<div class="row"><div class="badge">${tx.icon}</div>
-      <div class="row-main"><div class="row-title">${esc(t(tx.label))}</div><div class="row-sub">${esc(h.note || date)}</div></div>
-      <div class="amt ${Number(h.amount) === 0 || tx.sign === 0 ? '' : tx.sign > 0 ? 'pos' : 'neg'}">${Number(h.amount) === 0 ? esc(t('ui_free')) : (tx.sign > 0 ? '+' : tx.sign < 0 ? '-' : '') + fmt(h.amount)}</div></div>`;
-  }).join('') : `<div class="empty">${esc(t('ui_no_transactions'))}</div>`;
-  calcFee();
-  renderLoans(d.loan);
-  renderLockbox(d.lockbox);
+  $('max').textContent = t('ui_max_tx', fmt(d.max));
+  updateSummary();
 }
 
-async function act(name, body) {
-  if (busy) return;
+// sem conta -> ficha de entrada; com conta -> banco completo
+function render(d, fresh) {
+  state = d;
+  $('welcome').classList.remove('approved', 'leaving');
+  $('welcome').classList.toggle('hidden', d.hasAccount);
+  $('bank').classList.toggle('hidden', !d.hasAccount);
+  if (d.hasAccount) renderBank(d); else renderWelcome(d, fresh);
+}
+
+// account approved: stamp the form, then show the receipt over it
+function approve(d) {
+  entering = true;
+  state = d;
+  $('welcome').classList.add('approved');
+  setTimeout(() => showReceipt(d.receipt), 1000);
+}
+
+// "go to my account": the form leaves and the full bank comes in
+function enterBank() {
+  $('welcome').classList.add('leaving');
+  setTimeout(() => {
+    entering = false;
+    setPage('deposit');
+    render(state);
+    $('amount').focus();
+  }, 380);
+}
+
+/* ------------------------------------------------------------------ actions */
+async function send(name, body) {
   busy = true;
-  document.querySelectorAll('.wood-btn').forEach(b => b.disabled = true);
+  updateSummary();
+  $('open-btn').disabled = true;
   await post(name, body);
-  setTimeout(() => { busy = false; document.querySelectorAll('.wood-btn').forEach(b => b.disabled = false); if (state) { $('openBtn').disabled = (state.cash || 0) < (state.openFee || 0); $('boxUpgradeBtn').disabled = !!$('boxUpgradeBtn').dataset.locked; } }, 500);
+  busy = false;
+  if (state) {
+    updateSummary();
+    updateOpenButton();
+  }
 }
 
-function close() { $('app').classList.add('hidden'); post('close'); }
+function submit() {
+  if (!state || !state.hasAccount || busy || $('submit').disabled) return;
+  const amount = amountValue();
+  if (page === 'transfer') {
+    pendingTransfer = { target: $('target').value.trim().toUpperCase(), amount };
+    $('cf-from').textContent = state.label;
+    $('cf-to').textContent = pendingTransfer.target;
+    $('cf-amount').textContent = fmt(amount);
+    $('confirm-modal').classList.remove('hidden');
+    return;
+  }
+  send(page, { amount });
+}
 
-window.addEventListener('message', e => {
-  const m = e.data;
-  if (m.action === 'open') { if (m.locales) { L = m.locales; applyI18n(); } render(m.data); setTab('vault'); $('amount').value = ''; $('wireAmount').value = ''; $('loanAmount').value = ''; $('loanPayAmount').value = ''; $('boxQty').value = ''; $('app').classList.remove('hidden'); window.restorePanelPos && window.restorePanelPos(); }
-  else if (m.action === 'update') render(m.data);
-  else if (m.action === 'close') $('app').classList.add('hidden');
+function openAccount() {
+  if (!state || state.hasAccount || busy || $('open-btn').disabled) return;
+  send('openAccount');
+}
+
+function closeConfirm() { $('confirm-modal').classList.add('hidden'); pendingTransfer = null; }
+function confirmTransfer() {
+  if (!pendingTransfer) return;
+  const body = pendingTransfer;
+  closeConfirm();
+  send('transfer', body);
+}
+
+function showReceipt(r) {
+  $('rc-type').textContent = t('ui_receipt_' + r.type);
+  $('rc-amount').textContent = fmt(r.amount);
+  $('rc-bank').textContent = `${state.label} · ${t('ui_branch', state.code || '—')}`;
+  $('rc-to-row').classList.toggle('hidden', r.type !== 'transfer');
+  if (r.type === 'transfer') $('rc-to').textContent = `${r.toName || '—'} (${r.toCid})`;
+  $('rc-date').textContent = new Date((r.time || Date.now() / 1000) * 1000).toLocaleString();
+  $('rc-id').textContent = r.id || '—';
+  // after opening the account the button leads into the full bank
+  $('rc-ok').textContent = t(r.type === 'opened' ? 'ui_continue' : 'ui_ok');
+  receiptType = r.type;
+  $('receipt-modal').classList.remove('hidden');
+}
+// receipts that end the visit: the whole menu closes after "Done"
+const CLOSE_AFTER = { deposit: true, withdraw: true };
+let receiptType = null;
+
+function closeReceipt() {
+  $('receipt-modal').classList.add('hidden');
+  if (entering) return enterBank();
+  if (CLOSE_AFTER[receiptType]) return close();
+  $('amount').value = '';
+  if (page === 'transfer') $('target').value = '';
+  updateSummary();
+  if (state && state.hasAccount) $('amount').focus();
+}
+
+function hideAll() {
+  clearInterval(typing);
+  entering = false;
+  closeConfirm();
+  $('receipt-modal').classList.add('hidden');
+  $('app').classList.add('hidden');
+  state = null;
+}
+function close() { hideAll(); post('close'); }
+
+document.querySelectorAll('.nav-item[data-page]').forEach(n => n.addEventListener('click', () => setPage(n.dataset.page)));
+document.querySelectorAll('#quick .chip').forEach(b => b.addEventListener('click', () => {
+  if (!state) return;
+  let v;
+  if (b.dataset.add === 'all') v = Math.floor(Math.min(Number(PAGES[page].all()) || 0, state.max) * 100) / 100;
+  else v = Math.min(amountValue() + Number(b.dataset.add), state.max);
+  $('amount').value = v > 0 ? v.toFixed(2) : '';
+  updateSummary();
+}));
+$('amount').addEventListener('input', updateSummary);
+$('target').addEventListener('input', updateSummary);
+$('submit').addEventListener('click', submit);
+$('w-terms').addEventListener('change', updateOpenButton);
+$('open-btn').addEventListener('click', openAccount);
+$('w-cancel').addEventListener('click', close);
+$('close').addEventListener('click', close);
+$('cf-cancel').addEventListener('click', closeConfirm);
+$('cf-ok').addEventListener('click', confirmTransfer);
+$('rc-ok').addEventListener('click', closeReceipt);
+
+document.addEventListener('keyup', e => {
+  if (!state) return;
+  if (!$('receipt-modal').classList.contains('hidden')) {
+    if (e.key === 'Escape' || e.key === 'Enter') closeReceipt();
+    return;
+  }
+  if (!$('confirm-modal').classList.contains('hidden')) {
+    if (e.key === 'Escape') closeConfirm();
+    else if (e.key === 'Enter') confirmTransfer();
+    return;
+  }
+  if (entering) return; // stamp animation running
+  if (e.key === 'Escape') close();
+  else if (e.key === 'Enter') state.hasAccount ? submit() : openAccount();
 });
 
-document.querySelectorAll('[data-tab]').forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
-document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
-  const q = c.dataset.q;
-  $('amount').value = q === 'all-cash' ? (state?.cash || 0) : q === 'all-bank' ? (state?.balance || 0) : q;
-}));
-$('depositBtn').onclick = () => { const a = parseFloat($('amount').value); if (a > 0) act('deposit', { amount: a }); };
-$('withdrawBtn').onclick = () => { const a = parseFloat($('amount').value); if (a > 0) act('withdraw', { amount: a }); };
-$('wireBtn').onclick = () => { const a = parseFloat($('wireAmount').value), t = $('wireTarget').value; if (a > 0 && t) act('transfer', { target: t, amount: a }); };
-$('openBtn').onclick = () => act('openAccount', {});
-$('wireAmount').addEventListener('input', calcFee);
-$('loanAmount').addEventListener('input', loanRepayInfo);
-$('loanMax').onclick = () => { if (state?.loan) { $('loanAmount').value = state.loan.max; loanRepayInfo(); } };
-// Enter submits the main action of the focused field
-[['amount', 'depositBtn'], ['wireAmount', 'wireBtn'], ['loanAmount', 'loanTakeBtn'], ['loanPayAmount', 'loanPayBank']].forEach(([inp, btn]) =>
-  $(inp).addEventListener('keydown', e => { if (e.key === 'Enter') $(btn).click(); }));
-$('loanTakeBtn').onclick = () => { const a = parseFloat($('loanAmount').value); if (a > 0) act('takeLoan', { amount: a }); };
-$('loanPayAll').onclick = () => { if (state?.loan?.active) $('loanPayAmount').value = state.loan.active.owed; };
-$('loanPayBank').onclick = () => { const a = parseFloat($('loanPayAmount').value); if (a > 0) act('repayLoan', { amount: a, method: 'bank' }); };
-$('loanPayCash').onclick = () => { const a = parseFloat($('loanPayAmount').value); if (a > 0) act('repayLoan', { amount: a, method: 'cash' }); };
-$('closeBtn').onclick = close;
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('app').classList.contains('hidden')) close(); });
-
-// ---- draggable panel (drag by header, position remembered) ----
-(() => {
-  const panel = document.querySelector('.panel'), header = document.querySelector('.header');
-  const KEY = 'rsg-banking-pos';
-  let drag = null;
-
-  const clamp = (x, y) => [
-    Math.min(Math.max(0, x), window.innerWidth - panel.offsetWidth),
-    Math.min(Math.max(0, y), window.innerHeight - panel.offsetHeight),
-  ];
-  const place = (x, y) => {
-    [x, y] = clamp(x, y);
-    panel.classList.add('dragged');
-    panel.style.left = x + 'px'; panel.style.top = y + 'px';
-  };
-
-  window.restorePanelPos = () => {
-    try {
-      const p = JSON.parse(localStorage.getItem(KEY));
-      if (p) requestAnimationFrame(() => place(p.x, p.y));
-    } catch (e) {}
-  };
-
-  header.addEventListener('mousedown', e => {
-    if (e.button !== 0 || e.target.closest('.circle-btn')) return;
-    const r = panel.getBoundingClientRect();
-    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
-    place(r.left, r.top);
-    panel.classList.add('dragging');
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => { if (drag) place(e.clientX - drag.dx, e.clientY - drag.dy); });
-  document.addEventListener('mouseup', () => {
-    if (!drag) return;
-    drag = null; panel.classList.remove('dragging');
-    try { localStorage.setItem(KEY, JSON.stringify({ x: panel.offsetLeft, y: panel.offsetTop })); } catch (e) {}
-  });
-  // double-click header to re-centre
-  header.addEventListener('dblclick', e => {
-    if (e.target.closest('.circle-btn')) return;
-    panel.classList.remove('dragged'); panel.style.left = panel.style.top = '';
-    try { localStorage.removeItem(KEY); } catch (e) {}
-  });
-})();
+window.addEventListener('message', e => {
+  const msg = e.data || {};
+  if (msg.action === 'open') {
+    if (msg.locales) { L = msg.locales; applyI18n(); }
+    if (typeof msg.hour === 'number') gameHour = msg.hour;
+    $('target').value = '';
+    $('w-terms').checked = false;
+    entering = false;
+    state = msg.data;
+    setPage('deposit');
+    render(msg.data, true);
+    $('app').classList.remove('hidden');
+  } else if (msg.action === 'update') {
+    if (!state || entering) return;
+    const r = msg.data.receipt;
+    if (r && r.type === 'opened') return approve(msg.data);
+    render(msg.data);
+    if (r) showReceipt(r);
+  } else if (msg.action === 'close') {
+    hideAll();
+  }
+});

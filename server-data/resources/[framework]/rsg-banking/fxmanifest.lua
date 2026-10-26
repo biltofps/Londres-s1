@@ -2,8 +2,8 @@ fx_version 'cerulean'
 rdr3_warning 'I acknowledge that this is a prerelease build of RedM, and I am aware my resources *will* become incompatible once RedM ships.'
 game 'rdr3'
 
-description 'rsg-banking - individual branch banks across the frontier'
-version '3.0.2'
+description 'rsg-banking - each bank keeps its own money (RSG-Core money types)'
+version '4.0.0'
 
 shared_scripts {
     '@ox_lib/init.lua',
@@ -14,12 +14,9 @@ server_scripts {
     '@oxmysql/lib/MySQL.lua',
     'server/sv_config.lua',
     'server/webhooks.lua',
-    'server/database.lua',
     'server/server.lua',
-    'server/loans.lua',
-    'server/lockbox.lua',
-    'server/homebank.lua',
-    'server/versionchecker.lua'
+    'server/database.lua',
+    'server/maintenance.lua',
 }
 
 client_scripts {

@@ -99,7 +99,7 @@ BankMoney = money
 -- Sends the large-transaction alert when the amount is over the threshold
 function BankLogLarge(kind, src, bankLabel, amount, fields)
     if (tonumber(amount) or 0) < (W.largeAmount or math.huge) then return end
-    local f = { { name = 'Type', value = kind, inline = true }, { name = 'Branch', value = bankLabel, inline = true },
+    local f = { { name = 'Type', value = kind, inline = true }, { name = 'Bank', value = bankLabel, inline = true },
                 { name = 'Amount', value = money(amount), inline = true } }
     for _, x in ipairs(fields or {}) do f[#f + 1] = x end
     BankLog('large', src, f, { content = W.largeMention ~= '' and W.largeMention or nil })

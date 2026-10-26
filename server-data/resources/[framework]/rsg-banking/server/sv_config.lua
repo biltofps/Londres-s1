@@ -16,19 +16,17 @@ SVConfig.Webhooks = {
     -- Per-event settings. url = '' uses the default above. enabled = false turns the event off.
     events = {
         account_opened = { enabled = true, url = '', color = 3447003,  title = 'Account Opened' },
+        maintenance    = { enabled = true, url = '', color = 9807270,  title = 'Account Maintenance' },
         deposit        = { enabled = true, url = '', color = 5763719,  title = 'Deposit' },
         withdraw       = { enabled = true, url = '', color = 15105570, title = 'Withdrawal' },
-        transfer       = { enabled = true, url = '', color = 10181046, title = 'Wire Transfer' },
+        transfer       = { enabled = true, url = '', color = 10181046, title = 'Transfer' },
         large          = { enabled = true, url = '', color = 15548997, title = 'Large Transaction' },
         suspicious     = { enabled = true, url = '', color = 10038562, title = 'Suspicious Activity' },
-        export         = { enabled = true, url = '', color = 9807270,  title = 'Script Balance Change' },
         system         = { enabled = true, url = '', color = 2303786,  title = 'System' },
-        loan           = { enabled = true, url = '', color = 15844367, title = 'Loan' },
-        lockbox        = { enabled = true, url = '', color = 12745742, title = 'Vault Lockbox' },
     },
 
     -- Large transaction alert (sent in addition to the normal log)
-    largeAmount  = 5000,             -- $ threshold for deposit / withdraw / wire
+    largeAmount  = 5000,             -- $ threshold for deposit / withdraw / transfer
     largeMention = '',               -- e.g. '<@&123456789012345678>' to ping a role, '' = no ping
 
     -- Suspicious activity: repeated spam / out-of-range requests

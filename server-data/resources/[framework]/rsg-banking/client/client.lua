@@ -22,20 +22,16 @@ end
 
 -- every UI string is sent to the NUI from the active ox_lib locale
 local UI_KEYS = {
-    'ui_vault', 'ui_close', 'ui_bank', 'ui_customer', 'ui_no_account_title', 'ui_no_account_desc', 'ui_open_account',
-    'ui_branch_vault', 'ui_cash_on_hand', 'ui_tab_teller', 'ui_tab_wire', 'ui_tab_branches', 'ui_tab_ledger',
-    'ui_amount', 'ui_all_cash', 'ui_all_vault', 'ui_deposit', 'ui_withdraw', 'ui_no_other_title', 'ui_no_other_desc',
-    'ui_wire_desc', 'ui_send_wire', 'ui_fee_info', 'ui_opening_fee', 'ui_free_to_open', 'ui_tx_deposit', 'ui_tx_withdraw',
-    'ui_tx_wire_in', 'ui_tx_wire_out', 'ui_tx_opened', 'ui_branch_no_account', 'ui_branch_here', 'ui_branch_visit',
-    'ui_pill_here', 'ui_free', 'ui_no_transactions', 'ui_pill_home', 'ui_make_home', 'ui_home_hint',
-    -- loans
-    'ui_tab_loans', 'ui_loan_desc', 'ui_loan_terms', 'ui_loan_repay_total', 'ui_take_loan', 'ui_loan_owed', 'ui_loan_due',
-    'ui_loan_overdue', 'ui_loan_limit_at', 'ui_max', 'ui_pay_vault', 'ui_pay_cash', 'ui_pay_all', 'ui_loan_limit', 'ui_loan_age', 'ui_loan_borrowed',
-    'ui_tx_loan', 'ui_tx_loan_payment', 'ui_tx_loan_late', 'ui_tx_lockbox', 'ui_tx_lockbox_up',
-    -- lockbox
-    'ui_tab_lockbox', 'ui_lockbox_desc', 'ui_lockbox_accepts', 'ui_lockbox_capacity', 'ui_rent', 'ui_lockbox_used',
-    'ui_enlarge', 'ui_lockbox_maxed', 'ui_in_lockbox', 'ui_on_you', 'ui_qty', 'ui_store', 'ui_take', 'ui_lockbox_empty',
-    'ui_nothing_to_store', 'ui_paid_from_vault', 'ui_paid_cash',
+    'ui_close', 'ui_customer', 'ui_founded', 'ui_branch', 'ui_branch_lbl', 'ui_account', 'ui_balance', 'ui_cash',
+    'ui_maintenance', 'ui_maint_every', 'ui_maint_next', 'ui_free',
+    'ui_welcome', 'ui_open_desc', 'ui_open_form', 'ui_holder', 'ui_open_fee', 'ui_open_account', 'ui_terms', 'ui_signature',
+    'ui_greet_morning', 'ui_greet_afternoon', 'ui_greet_evening', 'ui_teller', 'ui_sheet_no', 'ui_approved', 'ui_missing',
+    'ui_tab_deposit', 'ui_tab_withdraw', 'ui_tab_transfer', 'ui_deposit_desc', 'ui_withdraw_desc', 'ui_transfer_desc',
+    'ui_amount', 'ui_target_cid', 'ui_all', 'ui_max_tx',
+    'ui_current_balance', 'ui_after_balance', 'ui_cash_after', 'ui_deposit', 'ui_withdraw', 'ui_transfer',
+    'ui_confirm_transfer', 'ui_confirm_desc', 'ui_from', 'ui_to', 'ui_cancel', 'ui_confirm',
+    'ui_receipt', 'ui_receipt_opened', 'ui_receipt_deposit', 'ui_receipt_withdraw', 'ui_receipt_transfer',
+    'ui_bank', 'ui_date', 'ui_receipt_id', 'ui_ok', 'ui_continue',
 }
 local uiLocales
 
@@ -61,7 +57,7 @@ RegisterNetEvent('rsg-banking:client:open', function(bankId)
     if not data then return end
     currentBank = bankId
     SetNuiFocus(true, true)
-    SendNUIMessage({ action = 'open', data = data, locales = getUILocales() })
+    SendNUIMessage({ action = 'open', data = data, locales = getUILocales(), hour = GetClockHours() })
 end)
 
 RegisterNUICallback('close', function(_, cb) closeUI(); cb('ok') end)
@@ -79,17 +75,10 @@ local function nuiAction(name, cbName, ...)
     end)
 end
 
-nuiAction('openAccount',     'rsg-banking:server:openAccount')
-nuiAction('setHome',         'rsg-banking:server:setHome')
-nuiAction('deposit',         'rsg-banking:server:deposit',         'amount')
-nuiAction('withdraw',        'rsg-banking:server:withdraw',        'amount')
-nuiAction('transfer',        'rsg-banking:server:transfer',        'target', 'amount')
-nuiAction('takeLoan',        'rsg-banking:server:takeLoan',        'amount')
-nuiAction('repayLoan',       'rsg-banking:server:repayLoan',       'amount', 'method')
-nuiAction('buyLockbox',      'rsg-banking:server:buyLockbox',      'size')
-nuiAction('upgradeLockbox',  'rsg-banking:server:upgradeLockbox')
-nuiAction('lockboxDeposit',  'rsg-banking:server:lockboxDeposit',  'item', 'qty')
-nuiAction('lockboxWithdraw', 'rsg-banking:server:lockboxWithdraw', 'item', 'qty')
+nuiAction('openAccount', 'rsg-banking:server:openAccount')
+nuiAction('deposit',     'rsg-banking:server:deposit',  'amount')
+nuiAction('withdraw',    'rsg-banking:server:withdraw', 'amount')
+nuiAction('transfer',    'rsg-banking:server:transfer', 'target', 'amount')
 
 -- close the menu if the player walks away or the bank closes
 CreateThread(function()
