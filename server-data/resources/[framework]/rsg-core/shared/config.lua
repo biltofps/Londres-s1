@@ -12,7 +12,7 @@ RSGConfig.Money.DontAllowMinus = { 'cash', 'gold', 'bloodmoney', 'bank' }    -- 
 RSGConfig.Money.MinusLimit = -5000                                   -- The maximum amount you can be negative 
 RSGConfig.Money.PayCheckTimeOut = 10                                 -- The time in minutes that it will give the paycheck
 RSGConfig.Money.PayCheckSociety = false                              -- NOT supported by rsg-banking v3 (no society accounts) - leave false
-RSGConfig.Money.EnableMoneyItems = true                              -- If true cash and bloodmoney will be represented wih inventory items
+RSGConfig.Money.EnableMoneyItems = false                             -- If true cash and bloodmoney will be represented wih inventory items (off: money is only a balance, shown in the inventory header)
 RSGConfig.Money.GoldItem = 'gold'                                    -- Inventory item used to represent gold when EnableGoldItems is true
 
 RSGConfig.Gold = {}

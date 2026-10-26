@@ -1,5 +1,8 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-lib.locale()
+
+-- always the server language (setr ox:locale in server.cfg), never the player's ox_lib choice
+local ServerLocale = GetConvar('ox:locale', 'en')
+lib.locale(ServerLocale)
 
 local isOpen     = false
 local loggedIn   = LocalPlayer.state.isLoggedIn or false
@@ -26,6 +29,19 @@ local function HotbarItems()
     return out
 end
 
+local function PlayerInfo(pd)
+    pd = pd or RSGCore.Functions.GetPlayerData() or {}
+    local ci = pd.charinfo or {}
+    return {
+        firstname = ci.firstname, lastname = ci.lastname, citizenid = pd.citizenid,
+        job = pd.job and pd.job.label,
+        id = GetPlayerServerId(PlayerId()),
+        cash = pd.money and pd.money.cash or 0,
+        gold = pd.money and pd.money.gold or 0,
+        bloodmoney = pd.money and pd.money.bloodmoney or 0,
+    }
+end
+
 local labelKeys = {
     'ui_satchel', 'ui_belongings', 'ui_ground', 'ui_drop_here', 'ui_storage', 'ui_shop_hint', 'ui_searching',
     'ui_amount', 'ui_use', 'ui_give', 'ui_hint', 'ui_inspect', 'ui_weight', 'ui_price', 'ui_sells_for',
@@ -33,12 +49,24 @@ local labelKeys = {
     'ui_drop', 'ui_split', 'ui_take', 'ui_move_to', 'ui_buy', 'ui_sell', 'ui_copy_serial',
     'ui_one', 'ui_half', 'ui_all_amount', 'ui_enter_amount', 'ui_max', 'ui_cancel', 'ui_confirm',
     'ui_kg', 'ui_close', 'ui_amount_tip', 'info_serie', 'info_quality',
+    'ui_drop_item', 'ui_drop_confirm', 'ui_cash', 'ui_gold', 'ui_bloodmoney', 'ui_job', 'ui_slots', 'ui_transfer', 'ui_citizenid', 'ui_server_id', 'ui_firstname', 'ui_lastname',
+    'ui_give_to', 'ui_person', 'ui_nobody',
 }
 local labels
+
+-- ox_lib switches every resource when a player changes language in its menu; switch back
+AddEventHandler('ox_lib:setLocale', function()
+    lib.locale(ServerLocale)
+    labels = nil
+end)
+
 local function UiLabels()
     if not labels then
         labels = {}
-        for _, k in ipairs(labelKeys) do labels[k] = locale(k) end
+        for _, k in ipairs(labelKeys) do
+            local v = locale(k)
+            if v ~= k then labels[k] = v end -- missing in this locale: let the NUI fallback show
+        end
     end
     return labels
 end
@@ -87,13 +115,18 @@ end
 RegisterNetEvent('rsg-inventory:client:open', function(player, other)
     isOpen = true
     SetNuiFocus(true, true)
-    Send('open', { player = player, other = other, imagePath = Config.ImagePath, hotbarSlots = Config.HotbarSlots, labels = UiLabels(), categoryLabels = Config.CategoryLabels })
+    Send('open', { player = player, other = other, info = PlayerInfo(), uiScale = Config.UiScale, imagePath = Config.ImagePath, hotbarSlots = Config.HotbarSlots, labels = UiLabels(), categoryLabels = Config.CategoryLabels })
 end)
 
 RegisterNetEvent('rsg-inventory:client:refresh', function(player, other)
     if isOpen then
         Send('refresh', { player = player, other = other })
     end
+end)
+
+-- cash changes (selling, money items moving) while the bag is open
+RegisterNetEvent('RSGCore:Player:SetPlayerData', function(pd)
+    if isOpen then Send('playerInfo', PlayerInfo(pd)) end
 end)
 
 RegisterNetEvent('rsg-inventory:client:close', Close)
@@ -207,12 +240,65 @@ RegisterNUICallback('drop', function(data, cb)
 end)
 
 RegisterNUICallback('give', function(data, cb)
-    local player, dist = lib.getClosestPlayer(GetEntityCoords(cache.ped), Config.GiveDistance, false)
-    if not player then
+    local target = tonumber(data.target)
+    if not target then
+        local player = lib.getClosestPlayer(GetEntityCoords(cache.ped), Config.GiveDistance, false)
+        target = player and GetPlayerServerId(player)
+    end
+    if not target then
         if Config.Notifications then lib.notify({ title = locale('inventory'), description = locale('no_player'), type = 'error', duration = 4000 }) end
         return cb('ok')
     end
-    TriggerServerEvent('rsg-inventory:server:give', GetPlayerServerId(player), data.slot, data.amount)
+    TriggerServerEvent('rsg-inventory:server:give', target, data.slot, data.amount)
+    cb('ok')
+end)
+
+-- money transfer (right-click Cash / Blood money); the server checks balance and distance
+RegisterNUICallback('giveMoney', function(data, cb)
+    local target = tonumber(data.target)
+    if target then TriggerServerEvent('rsg-inventory:server:giveMoney', target, data.type, tonumber(data.amount)) end
+    cb('ok')
+end)
+
+RegisterNUICallback('notifyNoMoney', function(_, cb)
+    lib.notify({ title = locale('inventory'), description = locale('no_money'), type = 'error', duration = 4000 })
+    cb('ok')
+end)
+
+-- give picker: players in range, closest first
+RegisterNUICallback('nearbyPlayers', function(_, cb)
+    local pc, list = GetEntityCoords(cache.ped), {}
+    for _, p in ipairs(lib.getNearbyPlayers(pc, Config.GiveDistance, false)) do
+        list[#list + 1] = { id = GetPlayerServerId(p.id), dist = #(pc - p.coords) }
+    end
+    table.sort(list, function(a, b) return a.dist < b.dist end)
+    if #list == 0 then
+        lib.notify({ title = locale('inventory'), description = locale('no_player'), type = 'error', duration = 4000 })
+    end
+    cb(list)
+end)
+
+-- ring under the player hovered in the give picker
+local giveHover, hoverThread
+RegisterNUICallback('giveHover', function(data, cb)
+    giveHover = tonumber(data.id)
+    if giveHover and not hoverThread then
+        hoverThread = true
+        CreateThread(function()
+            while giveHover and isOpen do
+                local ply = GetPlayerFromServerId(giveHover)
+                local ped = ply ~= -1 and GetPlayerPed(ply)
+                if ped and DoesEntityExist(ped) then
+                    local c = GetEntityCoords(ped)
+                    Citizen.InvokeNative(0x2A32FAA57B937173, 0x94FDAE17, c.x, c.y, c.z - 0.95,
+                        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.9, 0.2, 209, 168, 94, 200,
+                        false, false, 2, false, nil, nil, false)
+                end
+                Wait(0)
+            end
+            giveHover, hoverThread = nil, nil
+        end)
+    end
     cb('ok')
 end)
 

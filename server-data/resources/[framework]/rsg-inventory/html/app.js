@@ -20,7 +20,19 @@ const state = {
     player: null,
     other: null,
     drag: null,
+    hideGround: false, // opened with nothing nearby: no ground panel, drop via the bottom bar
 };
+
+/* ------------------------------------------------------------------ responsive scale */
+// sizes in style.css are for 1920x1080; scale everything to the real screen
+let uiScaleMul = 1; // Config.UiScale
+function applyScale() {
+    const fit = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    const s = Math.max(0.55, Math.min(2.5, fit * uiScaleMul));
+    document.documentElement.style.setProperty('--ui-scale', s.toFixed(3));
+}
+window.addEventListener('resize', applyScale);
+applyScale();
 
 function post(name, data = {}) {
     return fetch(`https://${RES}/${name}`, {
@@ -52,7 +64,16 @@ function setWeight(prefix, inv) {
     const pct = inv.maxWeight > 0 ? Math.min(100, (used / inv.maxWeight) * 100) : 0;
     $(`${prefix}-weight`).textContent = kg(used);
     $(`${prefix}-max`).textContent = kg(inv.maxWeight || 0);
-    const bar = $(`${prefix}-bar`);
+    setFill($(`${prefix}-bar`), pct);
+
+    // slots in use (a stack counts as one slot)
+    const filled = Object.keys(inv.map).length, total = inv.slots || 0;
+    $(`${prefix}-used`).textContent = filled;
+    $(`${prefix}-slots`).textContent = total;
+    setFill($(`${prefix}-slotbar`), total > 0 ? Math.min(100, (filled / total) * 100) : 0);
+}
+
+function setFill(bar, pct) {
     bar.style.width = pct + '%';
     bar.className = 'fill ' + (pct < 70 ? 'stat-good' : pct < 90 ? 'stat-warn' : 'stat-bad');
 }
@@ -96,7 +117,7 @@ function renderFilters(invKey) {
     const cats = [...new Set(Object.values(inv.map).map(categoryOf))].sort();
     // reset a filter whose category no longer exists in this inventory
     if (filters[invKey] !== 'all' && !cats.includes(filters[invKey])) filters[invKey] = 'all';
-    bar.classList.toggle('hidden', cats.length < 2);
+    bar.classList.toggle('empty', cats.length < 2); // keeps its space so the panel size never changes
     bar.innerHTML = ['all', ...cats].map((c) =>
         `<button class="chip${filters[invKey] === c ? ' active' : ''}" data-filter="${esc(c)}" data-inv="${invKey}">${esc(categoryLabel(c))}</button>`
     ).join('');
@@ -122,16 +143,24 @@ function renderGrid(invKey) {
     }
 }
 
+// category row has no scrollbar: mouse wheel scrolls it sideways
+document.addEventListener('wheel', (e) => {
+    const bar = e.target.closest('.filters');
+    if (!bar || bar.scrollWidth <= bar.clientWidth) return;
+    bar.scrollLeft += e.deltaY || e.deltaX;
+    e.preventDefault();
+}, { passive: false });
+
 document.addEventListener('click', (e) => {
     const chip = e.target.closest('.chip[data-filter]');
     if (!chip) return;
     filters[chip.dataset.inv] = chip.dataset.filter;
     renderGrid(chip.dataset.inv);
+    $(`grid-${chip.dataset.inv}`).scrollTop = 0;
 });
 
 function render() {
     if (state.player) {
-        $('player-label').textContent = state.player.label || L('ui_satchel', 'Satchel');
         setWeight('player', state.player);
         renderGrid('player');
     }
@@ -154,7 +183,25 @@ function render() {
 function setInv(key, data) {
     if (data === false) { state[key] = null; return; }
     if (!data) return; // undefined/null = unchanged
+    if (key === 'other' && state.hideGround && data.type === 'drop') { state.other = null; return; }
     state[key] = { ...data, map: bySlot(data.items) };
+}
+
+/* ------------------------------------------------------------------ player info */
+const money = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function renderPlayerInfo(p) {
+    if (!p) return;
+    state.info = p; // balances for the money transfer
+    const first = p.firstname || '', last = p.lastname || '';
+    $('pi-first').textContent = first || '—';
+    $('pi-last').textContent = last || '—';
+    $('pi-id').textContent = p.id ?? '—';
+    $('pi-cid').textContent = p.citizenid || '—';
+    $('pi-job').textContent = p.job || '—';
+    $('pi-cash').textContent = money(p.cash);
+    $('pi-blood').textContent = money(p.bloodmoney);
+    $('pi-gold').textContent = (Number(p.gold) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 /* ------------------------------------------------------------------ info */
@@ -172,6 +219,19 @@ function showInfo(item) {
         rows.push(`<div><span>${esc(L('info_' + k, k))}</span>${esc(v)}</div>`);
     });
     $('info-meta').innerHTML = rows.join('');
+    $('info-desc').classList.toggle('hidden', !item.description);
+    $('tip').classList.remove('hidden');
+}
+
+function hideInfo() { $('tip').classList.add('hidden'); }
+
+// keep the tooltip next to the cursor without leaving the screen
+function placeInfo(x, y) {
+    const tip = $('tip');
+    if (tip.classList.contains('hidden')) return;
+    const { width: w, height: h } = tip.getBoundingClientRect(); // includes --ui-scale
+    tip.style.left = (x + 18 + w > window.innerWidth ? x - w - 18 : x + 18) + 'px';
+    tip.style.top = Math.max(8, Math.min(y + 18, window.innerHeight - h - 8)) + 'px';
 }
 
 /* ------------------------------------------------------------------ drag */
@@ -187,11 +247,9 @@ function getItem(key, slot) {
 
 function requestedAmount(item, half, key) {
     const isShop = key === 'other' && state.other && state.other.type === 'shop';
-    const v = parseInt($('amount').value, 10);
-    if (isShop) return v > 0 ? v : 1;
+    if (isShop) return 1; // more than one: right-click > Buy
     if (half) return Math.max(1, Math.floor(item.amount / 2));
-    if (!v || v <= 0 || v > item.amount) return item.amount;
-    return v;
+    return item.amount;
 }
 
 function firstFreeSlot(key, name) {
@@ -218,8 +276,22 @@ document.addEventListener('mousedown', (e) => {
     const item = getItem(key, slot);
     if (!item) return;
 
-    if (e.button === 2) { // right click: context menu
-        openMenu(e.clientX, e.clientY, key, slot, item);
+    if (e.button === 2) {
+        const isShop = state.other && state.other.type === 'shop';
+        if (state.other && !isShop) {
+            // two inventories: right = 1 · shift + right = all · ctrl + right = type the amount
+            const target = key === 'player' ? 'other' : 'player';
+            const to = firstFreeSlot(target, item.name);
+            if (!to) return;
+            const send = (n) => move(key, slot, target, to, n);
+            if (e.ctrlKey) return openTransferModal(item, send, target);
+            return send(e.shiftKey ? item.amount : 1);
+        }
+        if (e.ctrlKey) { // alone: ctrl + right = split with typed amount
+            if (!isShop || key === 'player') openSplitModal(key, slot, item);
+            return;
+        }
+        openMenu(e.clientX, e.clientY, key, slot, item); // alone / shop: context menu
         return;
     }
     if (e.button !== 0) return;
@@ -241,14 +313,16 @@ document.addEventListener('mousemove', (e) => {
     if (!d.active) {
         if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) < 5) return;
         d.active = true;
+        hideInfo();
         d.el.classList.add('dragging');
+        if (d.key === 'player') $('app').classList.add('drag-player');
         const g = $('ghost');
         g.innerHTML = `<img src="${esc(imgSrc(d.item))}"><div class="qty">x${d.amount}</div>`;
         g.classList.remove('hidden');
     }
-    const g = $('ghost');
-    g.style.left = (e.clientX - 35) + 'px';
-    g.style.top = (e.clientY - 35) + 'px';
+    const g = $('ghost'); // centred on the cursor by CSS transform
+    g.style.left = e.clientX + 'px';
+    g.style.top = e.clientY + 'px';
     document.querySelectorAll('.drag-over').forEach((n) => n.classList.remove('drag-over'));
     const over = document.elementFromPoint(e.clientX, e.clientY);
     const target = over && (over.closest('#app .slot') || over.closest('.drop-zone'));
@@ -260,6 +334,7 @@ document.addEventListener('mouseup', (e) => {
     state.drag = null;
     if (!d) return;
     $('ghost').classList.add('hidden');
+    $('app').classList.remove('drag-player');
     d.el.classList.remove('dragging');
     document.querySelectorAll('.drag-over').forEach((n) => n.classList.remove('drag-over'));
     if (!d.active) return;
@@ -270,8 +345,7 @@ document.addEventListener('mouseup', (e) => {
     const zone = over.closest('.drop-zone');
     if (zone) {
         if (d.key !== 'player') return;
-        if (zone.dataset.zone === 'use') post('use', { slot: d.slot });
-        if (zone.dataset.zone === 'give') post('give', { slot: d.slot, amount: d.amount });
+        if (zone.dataset.zone === 'drop') confirmDrop(d.slot, d.item, d.amount);
         return;
     }
 
@@ -291,8 +365,13 @@ document.addEventListener('dblclick', (e) => {
 
 document.addEventListener('mouseover', (e) => {
     const el = e.target.closest('#app .slot.filled');
-    if (el) showInfo(getItem(el.dataset.inv, +el.dataset.slot));
+    if (!el || !state.open || state.drag || !$('ctx').classList.contains('hidden')) return hideInfo();
+    showInfo(getItem(el.dataset.inv, +el.dataset.slot));
+    placeInfo(e.clientX, e.clientY);
 });
+
+document.addEventListener('mousemove', (e) => { if (!state.drag) placeInfo(e.clientX, e.clientY); });
+document.addEventListener('mousedown', hideInfo);
 
 document.addEventListener('click', (e) => {
     if (e.target.closest('[data-action="close"]')) post('close');
@@ -300,13 +379,16 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keyup', (e) => {
     if (!state.open) return;
+    if (giveCtx) {
+        if (e.key === 'Escape') closeGivePicker();
+        return;
+    }
     if (!$('amount-modal').classList.contains('hidden')) {
         if (e.key === 'Escape') closeAmountModal();
         if (e.key === 'Enter') confirmAmountModal();
         return;
     }
     if (!$('ctx').classList.contains('hidden') && e.key === 'Escape') return closeMenu();
-    if (document.activeElement === $('amount') && e.key !== 'Escape') return;
     if (e.key === 'Escape' || e.key === 'Tab' || e.key.toLowerCase() === 'i') post('close');
 });
 
@@ -355,26 +437,17 @@ function buildMenu(key, slot, item) {
         if (item.useable || item.type === 'weapon' || item.type === 'weapon_thrown' || item.type === 'equipment') {
             entries.push({ label: L('ui_use', 'Use'), run: () => post('use', { slot }) });
         }
-        entries.push({ label: L('ui_give', 'Give'), sub: amountSub(item, (n) => post('give', { slot, amount: n })) });
-        entries.push({ label: L('ui_drop', 'Drop'), sub: amountSub(item, (n) => post('drop', { slot, amount: n })) });
+        entries.push({ label: L('ui_give', 'Give'), run: () => openGivePicker(slot, item) });
     }
 
-    if (other && other.type !== 'shop') {
-        const label = key === 'player' ? L('ui_move_to', 'Move to') + ' ' + (other.label || L('ui_ground', 'Ground'))
-                                       : L('ui_take', 'Take');
-        entries.push({ label, sub: amountSub(item, (n) => {
+    // taking from the ground / stash is done by dragging (amount from the centre box), no "Take" entry
+    if (other && other.type !== 'shop' && key === 'player') {
+        entries.push({ label: L('ui_move_to', 'Move to') + ' ' + (other.label || L('ui_ground', 'Ground')), sub: amountSub(item, (n) => {
             const to = firstFreeSlot(otherKey, item.name);
             if (to) move(key, slot, otherKey, to, n);
         }) });
     } else if (key === 'player' && other && other.type === 'shop') {
         entries.push({ label: L('ui_sell', 'Sell'), sub: amountSub(item, (n) => move('player', slot, 'other', 1, n)) });
-    }
-
-    if (!item.unique && item.amount > 1) {
-        entries.push({ label: L('ui_split', 'Split'), sub: amountSub(item, (n) => {
-            const to = firstEmptySlot(key);
-            if (to) move(key, slot, key, to, n);
-        }, { noAll: true, max: item.amount - 1 }) });
     }
 
     if (item.info && item.info.serie) {
@@ -411,13 +484,16 @@ function renderMenuList(list, entries) {
 }
 
 function openMenu(x, y, key, slot, item) {
-    const entries = buildMenu(key, slot, item);
+    showMenu(x, y, item.label, buildMenu(key, slot, item));
+}
+
+function showMenu(x, y, title, entries) {
     if (!entries.length) return;
     const menu = $('ctx');
-    $('ctx-title').textContent = item.label;
+    $('ctx-title').textContent = title;
     renderMenuList($('ctx-list'), entries);
     menu.classList.remove('hidden', 'flip');
-    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const { width: w, height: h } = menu.getBoundingClientRect(); // includes --ui-scale
     const left = Math.min(x, window.innerWidth - w - 8);
     menu.style.left = left + 'px';
     menu.style.top = Math.min(y, window.innerHeight - h - 8) + 'px';
@@ -431,20 +507,158 @@ document.addEventListener('mousedown', (e) => {
     if (!e.target.closest('#ctx')) closeMenu();
 }, true);
 
+// right-click on Cash / Blood money: Transfer
+document.addEventListener('mousedown', (e) => {
+    if (e.button !== 2 || !state.open) return;
+    const tile = e.target.closest('.pi-tile[data-money]');
+    if (!tile) return;
+    const type = tile.dataset.money;
+    const label = tile.querySelector('span').textContent;
+    showMenu(e.clientX, e.clientY, label, [
+        { label: L('ui_transfer', 'Transfer'), run: () => openGivePicker(null, null, { type, label }) },
+    ]);
+});
+
 /* ------------------------------------------------------------------ amount modal */
-let amountCb = null, amountMax = 1;
-function openAmountModal(item, max, cb) {
-    amountCb = cb; amountMax = max;
-    $('amount-modal-title').textContent = item.label;
-    $('amount-modal-max').textContent = `${L('ui_max', 'Max')}: ${max}`;
+let amountCb = null, amountMax = 1, amountDecimal = false;
+// opts: { title, desc, value, image, decimal } — decimal: money (cents allowed)
+function openAmountModal(item, max, cb, opts = {}) {
+    amountCb = cb; amountMax = max; amountDecimal = !!opts.decimal;
+    $('amount-modal-title').textContent = opts.title || item.label;
+    $('amount-modal-desc').textContent = opts.desc || '';
+    $('amount-modal-desc').classList.toggle('hidden', !opts.desc);
+    $('amount-modal-stamp').classList.toggle('hidden', !opts.image);
+    if (opts.image) {
+        $('amount-modal-img').style.visibility = '';
+        $('amount-modal-img').src = imgSrc(item);
+    }
+    $('amount-modal-max').textContent = `${L('ui_max', 'Max')}: ${amountDecimal ? money(max) : max}`;
     const input = $('amount-modal-input');
-    input.max = max; input.value = 1;
+    input.step = amountDecimal ? '0.01' : '1';
+    input.min = amountDecimal ? '0.01' : '1';
+    input.max = max; input.value = opts.value || 1;
     $('amount-modal').classList.remove('hidden');
     setTimeout(() => { input.focus(); input.select(); }, 0);
 }
+
+/* ------------------------------------------------------------------ give: player picker */
+let giveCtx = null;
+
+// item give: (slot, item) · money transfer: (null, null, { type, label })
+async function openGivePicker(slot, item, moneyCtx) {
+    let players = [];
+    try {
+        const res = await post('nearbyPlayers');
+        players = (res && await res.json()) || [];
+    } catch (err) { players = []; }
+    // nobody nearby: the client shows a notification, no picker
+    if (!players.length || !state.open) return;
+
+    giveCtx = { slot, item, money: moneyCtx || null };
+    $('give-stamp').classList.toggle('hidden', !item);
+    if (item) {
+        $('give-img').style.visibility = '';
+        $('give-img').src = imgSrc(item);
+    }
+    $('give-item').textContent = item ? item.label : moneyCtx.label;
+    $('give-list').innerHTML = players.map((p) => `<li class="give-player" data-id="${esc(p.id)}">
+            <span class="gp-id">${esc(L('ui_person', 'Person'))} <b>#${esc(p.id)}</b></span>
+            <span class="gp-dist">${esc(Number(p.dist).toFixed(1))} m</span>
+        </li>`).join('');
+    $('give-modal').classList.remove('hidden');
+}
+
+function closeGivePicker() {
+    if (!giveCtx) return;
+    giveCtx = null;
+    giveHoverId = null;
+    $('give-modal').classList.add('hidden');
+    post('giveHover', {});
+}
+
+function choosePlayer(target) {
+    const { slot, item, money: m } = giveCtx;
+    closeGivePicker();
+    if (m) {
+        const balance = Number(state.info && state.info[m.type]) || 0;
+        if (balance <= 0) return post('notifyNoMoney');
+        return openAmountModal({ label: m.label }, balance, (n) => post('giveMoney', { type: m.type, amount: n, target }), {
+            title: L('ui_transfer', 'Transfer'),
+            desc: `${m.label} → ${L('ui_person', 'Person')} #${target}`,
+            value: Math.min(1, balance),
+            decimal: true,
+        });
+    }
+    const give = (n) => post('give', { slot, amount: n, target });
+    // weapons / unique items / single items: no amount step
+    if (item.type === 'weapon' || item.type === 'weapon_thrown' || item.unique || (item.amount || 1) <= 1) return give(1);
+    openAmountModal(item, item.amount, give, {
+        title: L('ui_give', 'Give'),
+        desc: `${item.label} → ${L('ui_person', 'Person')} #${target}`,
+        value: 1,
+        image: true,
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-give="cancel"]')) return closeGivePicker();
+    const li = e.target.closest('.give-player');
+    if (li && giveCtx) choosePlayer(+li.dataset.id);
+});
+
+// highlight the hovered player in the world
+let giveHoverId = null;
+document.addEventListener('mouseover', (e) => {
+    if (!giveCtx) return;
+    const li = e.target.closest('.give-player');
+    const id = li ? +li.dataset.id : null;
+    if (id === giveHoverId) return;
+    giveHoverId = id;
+    post('giveHover', { id });
+});
+
+// ctrl + right click with two inventories open: type how many to move to the other side
+function openTransferModal(item, send, target) {
+    const max = item.amount || 1;
+    if (max <= 1) return send(1);
+    const dest = target === 'player'
+        ? L('ui_satchel', 'Satchel')
+        : ((state.other && state.other.label) || L('ui_ground', 'Ground'));
+    openAmountModal(item, max, send, {
+        title: L('ui_move_to', 'Move to') + ' ' + dest,
+        desc: item.label,
+        value: 1,
+        image: true,
+    });
+}
+
+// ctrl + right click: split part of a stack into the first empty slot of the same inventory
+function openSplitModal(key, slot, item) {
+    if (item.unique || (item.amount || 1) < 2) return;
+    openAmountModal(item, item.amount - 1, (n) => {
+        const to = firstEmptySlot(key);
+        if (to) move(key, slot, key, to, n);
+    }, {
+        title: L('ui_split', 'Split'),
+        desc: item.label,
+        value: Math.floor(item.amount / 2),
+        image: true,
+    });
+}
+
+function confirmDrop(slot, item, amount) {
+    const max = item.amount || 1;
+    openAmountModal(item, max, (n) => post('drop', { slot, amount: n }), {
+        title: L('ui_drop_item', 'Drop item'),
+        desc: L('ui_drop_confirm', 'Drop %s on the ground?').replace('%s', item.label),
+        value: Math.min(Math.max(1, amount || max), max),
+        image: true,
+    });
+}
 function closeAmountModal() { $('amount-modal').classList.add('hidden'); amountCb = null; }
 function confirmAmountModal() {
-    const n = parseInt($('amount-modal-input').value, 10);
+    const raw = $('amount-modal-input').value;
+    const n = amountDecimal ? Math.floor(parseFloat(raw) * 100 + 1e-6) / 100 : parseInt(raw, 10);
     const cb = amountCb;
     closeAmountModal();
     if (cb && n > 0) cb(Math.min(n, amountMax));
@@ -489,8 +703,8 @@ function showItemBox(d) {
     c.className = 'pos-' + (d.position || 'bottom');
     c.appendChild(box);
     while (c.children.length > 5) c.firstChild.remove();
-    setTimeout(() => box.classList.add('out'), 2600);
-    setTimeout(() => box.remove(), 3000);
+    setTimeout(() => box.classList.add('out'), 4600); // visible for 5s, last 0.4s fades out
+    setTimeout(() => box.remove(), 5000);
 }
 
 /* ------------------------------------------------------------------ messages */
@@ -501,16 +715,17 @@ window.addEventListener('message', ({ data: msg }) => {
             state.open = true;
             state.imagePath = d.imagePath || state.imagePath;
             state.hotbarSlots = d.hotbarSlots || 5;
+            if (d.uiScale) { uiScaleMul = Number(d.uiScale) || 1; applyScale(); }
             state.other = null;
+            state.hideGround = !!(d.other && d.other.type === 'drop' && d.other.id === 'newdrop');
             if (d.labels) labels = d.labels;
             categoryLabels = d.categoryLabels || {};
             filters.other = 'all';
             applyLabels();
-            $('info-title').textContent = '—';
-            $('info-meta').innerHTML = '';
+            hideInfo();
             setInv('player', d.player);
             setInv('other', d.other);
-            $('amount').value = 0;
+            renderPlayerInfo(d.info);
             $('hotbar').classList.add('hidden');
             $('app').classList.remove('hidden');
             render();
@@ -518,13 +733,20 @@ window.addEventListener('message', ({ data: msg }) => {
         case 'refresh':
             setInv('player', d.player);
             setInv('other', d.other);
+            renderPlayerInfo(d.info);
             render();
             break;
-        case 'close':
+        case 'playerInfo':
+            renderPlayerInfo(d);
+            break;
+        case 'close': // close everything the inventory had on screen
             closeMenu();
             closeAmountModal();
+            closeGivePicker();
+            hideInfo();
             state.open = false;
             state.drag = null;
+            $('app').classList.remove('drag-player');
             $('ghost').classList.add('hidden');
             $('app').classList.add('hidden');
             break;

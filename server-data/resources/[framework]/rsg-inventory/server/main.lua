@@ -818,6 +818,48 @@ RegisterNetEvent('rsg-inventory:server:give', function(targetId, slot, amount)
     Log('Give', ('%s gave %sx %s to %s'):format(GetPlayerName(src), amount, name, GetPlayerName(targetId)))
 end)
 
+-- right-click Cash / Blood money in the inventory header: hand money to a nearby player
+local TransferMoneyTypes = { cash = true, bloodmoney = true }
+
+local function MoneyNotify(src, text, kind)
+    TriggerClientEvent('ox_lib:notify', src, { title = locale('inventory'), description = text, type = kind, duration = 4000 })
+end
+
+RegisterNetEvent('rsg-inventory:server:giveMoney', function(targetId, moneyType, amount)
+    local src = source
+    targetId = tonumber(targetId)
+    amount = math.floor((tonumber(amount) or 0) * 100 + 0.5) / 100 -- whole cents
+    if not targetId or targetId == src or not TransferMoneyTypes[moneyType] or amount < 0.01 then return end
+    local now = GetGameTimer()
+    if GiveCooldown[src] and now - GiveCooldown[src] < 1000 then return end
+    GiveCooldown[src] = now
+
+    local me, them = RSGCore.Functions.GetPlayer(src), RSGCore.Functions.GetPlayer(targetId)
+    if not me or not them then return end
+    local meta = me.PlayerData.metadata or {}
+    if meta.isdead or meta.inlaststand or meta.ishandcuffed then return end
+    if Dist(src, GetEntityCoords(GetPlayerPed(targetId))) > Config.GiveDistance then
+        return MoneyNotify(src, locale('too_far'), 'error')
+    end
+    if (me.PlayerData.money[moneyType] or 0) < amount then
+        return MoneyNotify(src, locale('no_money'), 'error')
+    end
+
+    if not me.Functions.RemoveMoney(moneyType, amount, 'inventory-transfer') then
+        return MoneyNotify(src, locale('no_money'), 'error')
+    end
+    if not them.Functions.AddMoney(moneyType, amount, 'inventory-transfer') then
+        me.Functions.AddMoney(moneyType, amount, 'inventory-transfer-refund') -- never lose the money
+        return
+    end
+
+    local text = ('$%.2f'):format(amount)
+    MoneyNotify(src, locale('money_sent', text, targetId), 'success')
+    MoneyNotify(targetId, locale('money_received', text), 'success')
+    TriggerClientEvent('rsg-inventory:client:giveAnim', src)
+    Log('Give money', ('%s gave $%.2f (%s) to %s'):format(GetPlayerName(src), amount, moneyType, GetPlayerName(targetId)))
+end)
+
 -- right-click "Drop": put items on the ground at the player's feet
 local DropCooldown = {}
 RegisterNetEvent('rsg-inventory:server:drop', function(slot, amount)

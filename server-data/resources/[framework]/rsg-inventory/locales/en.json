@@ -64,5 +64,22 @@
     "cmd_param_amount": "Amount (default 1)",
     "itembox_received": "Received",
     "itembox_removed": "Removed",
-    "itembox_used": "Used"
+    "itembox_used": "Used",
+    "ui_drop_item": "Drop item",
+    "ui_drop_confirm": "Drop %s on the ground?",
+    "ui_cash": "Cash",
+    "ui_gold": "Gold",
+    "ui_bloodmoney": "Blood money",
+    "ui_job": "Job",
+    "ui_slots": "Slots",
+    "ui_transfer": "Transfer",
+    "money_sent": "You handed over %s to person #%s",
+    "money_received": "You received %s",
+    "ui_citizenid": "Citizen ID",
+    "ui_server_id": "ID",
+    "ui_firstname": "First name",
+    "ui_lastname": "Last name",
+    "ui_give_to": "Give to",
+    "ui_person": "Person",
+    "ui_nobody": "Nobody nearby"
 }

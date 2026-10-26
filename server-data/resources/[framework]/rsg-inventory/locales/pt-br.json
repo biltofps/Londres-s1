@@ -64,5 +64,22 @@
     "cmd_param_amount": "Quantidade (padrão 1)",
     "itembox_received": "Recebido",
     "itembox_removed": "Removido",
-    "itembox_used": "Usado"
+    "itembox_used": "Usado",
+    "ui_drop_item": "Largar item",
+    "ui_drop_confirm": "Largar %s no chão?",
+    "ui_cash": "Dinheiro",
+    "ui_gold": "Ouro",
+    "ui_bloodmoney": "Dinheiro sujo",
+    "ui_job": "Profissão",
+    "ui_slots": "Slots",
+    "ui_transfer": "Transferir",
+    "money_sent": "Você entregou %s para a pessoa #%s",
+    "money_received": "Você recebeu %s",
+    "ui_citizenid": "Cidadão",
+    "ui_server_id": "ID",
+    "ui_firstname": "Nome",
+    "ui_lastname": "Sobrenome",
+    "ui_give_to": "Dar para",
+    "ui_person": "Pessoa",
+    "ui_nobody": "Ninguém por perto"
 }

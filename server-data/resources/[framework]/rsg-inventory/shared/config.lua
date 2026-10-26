@@ -1,11 +1,12 @@
 Config = {}
 
 Config.ItemBox       = true     -- show the item image box when items are added / removed / used
-Config.ItemBoxPosition = 'right' -- 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'left', 'right'
+Config.ItemBoxPosition = 'bottom' -- 'top', 'bottom' (center-bottom), 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'left', 'right'
 Config.Notifications = false    -- set true to show ox_lib notifications from the inventory
 Config.Debug          = false    -- print why moves / shop purchases are rejected to the server console
 
 Config.ImagePath      = 'nui://rsg-inventory/html/images/' -- item images folder
+Config.UiScale        = 1.0      -- size multiplier for the NUI (it already adapts to the screen resolution; 1.1 = 10% bigger)
 
 -- Player defaults (fallbacks if rsg-core PlayerData has no slots/weight)
 Config.PlayerSlots    = 25
@@ -44,10 +45,12 @@ Config.GiveDistance   = 3.0
 
 -- Every 100 cents in an inventory is automatically exchanged for 1 dollar.
 -- Set to false to disable. Pairs must match the money items in rsg-core.
-Config.CoinConversion = {
-    { cent = 'cent',       dollar = 'dollar' },
-    { cent = 'blood_cent', dollar = 'blood_dollar' },
-}
+-- Disabled: money is not an item (RSGConfig.Money.EnableMoneyItems = false).
+Config.CoinConversion = false
+-- Config.CoinConversion = {
+--     { cent = 'cent',       dollar = 'dollar' },
+--     { cent = 'blood_cent', dollar = 'blood_dollar' },
+-- }
 
 -- Category filter: items use the `category` field from rsg-core shared items.
 -- Optional display names; any category not listed is shown prettified (ammo_pistol -> Ammo Pistol).
