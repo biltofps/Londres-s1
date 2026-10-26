@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>bilto_shop</title>
+</head>
+<body>
+    <script>
+        // so toca os sons .ogg da pasta html/sounds; falhou (arquivo faltando) -> o client toca o som nativo
+        const RES = (typeof GetParentResourceName === 'function') ? GetParentResourceName() : 'bilto_shop';
+        const fail = (kind) => fetch(`https://${RES}/soundFailed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+            body: JSON.stringify({ kind }),
+        }).catch(() => {});
+
+        window.addEventListener('message', ({ data: msg }) => {
+            if (!msg || msg.action !== 'sound') return;
+            const audio = new Audio(`sounds/${msg.file}`);
+            audio.volume = Math.max(0, Math.min(1, Number(msg.volume) || 0.5));
+            audio.onerror = () => fail(msg.kind);
+            audio.play().catch(() => fail(msg.kind));
+        });
+    </script>
+</body>
+</html>
