@@ -148,6 +148,8 @@ local function ClientInv(c)
     return {
         id = c.id, label = c.label, type = c.type, slots = c.slots,
         maxWeight = c.maxWeight, items = ItemList(c.items),
+        categoryLabels = c.categoryLabels, buys = c.buys, -- shops only
+        buysLabel = c.buysLabel, subtitle = c.subtitle,
     }
 end
 

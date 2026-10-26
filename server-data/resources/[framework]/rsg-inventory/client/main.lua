@@ -44,7 +44,7 @@ end
 
 local labelKeys = {
     'ui_satchel', 'ui_belongings', 'ui_ground', 'ui_drop_here', 'ui_storage', 'ui_shop_hint', 'ui_searching',
-    'ui_amount', 'ui_use', 'ui_give', 'ui_hint', 'ui_inspect', 'ui_weight', 'ui_price', 'ui_sells_for',
+    'ui_amount', 'ui_use', 'ui_give', 'ui_hint', 'ui_inspect', 'ui_weight', 'ui_price', 'ui_sells_for', 'ui_total', 'ui_each', 'ui_free', 'ui_we_buy',
     'ui_all', 'ui_misc', 'ui_no_matches',
     'ui_drop', 'ui_split', 'ui_take', 'ui_move_to', 'ui_buy', 'ui_sell', 'ui_copy_serial',
     'ui_one', 'ui_half', 'ui_all_amount', 'ui_enter_amount', 'ui_max', 'ui_cancel', 'ui_confirm',

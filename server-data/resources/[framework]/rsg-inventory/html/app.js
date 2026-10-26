@@ -58,6 +58,15 @@ const kg = (g) => (g / 1000).toFixed(1);
 const imgSrc = (it) => state.imagePath + (it.image || `${it.name}.png`);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// shop open: what the shop pays per unit for an item in the player's inventory
+function sellPrice(invKey, item) {
+    const shop = state.other;
+    if (invKey !== 'player' || !shop || shop.type !== 'shop') return undefined;
+    if (shop.buys && shop.buys[item.name]) return shop.buys[item.name].buyPrice;
+    const entry = Object.values(shop.map).find((it) => it.name === item.name && it.buyPrice !== undefined);
+    return entry ? entry.buyPrice : undefined;
+}
+
 /* ------------------------------------------------------------------ render */
 function setWeight(prefix, inv) {
     const used = totalWeight(inv.map);
@@ -88,6 +97,8 @@ function slotEl(invKey, slot, item, showKey) {
         html += `<img src="${esc(imgSrc(item))}" onerror="this.style.visibility='hidden'">`;
         html += `<div class="qty">${item.amount > 1 ? 'x' + item.amount : ''}</div>`;
         if (item.price !== undefined && invKey === 'other') html += `<div class="price">$${Number(item.price).toFixed(2)}</div>`;
+        const sp = sellPrice(invKey, item);
+        if (sp !== undefined) html += `<div class="price">$${Number(sp).toFixed(2)}</div>`;
         const q = item.info && typeof item.info.quality === 'number' ? item.info.quality : null;
         if (q !== null) {
             const cls = q > 60 ? 'stat-good' : q > 25 ? 'stat-warn' : 'stat-bad';
@@ -105,8 +116,16 @@ let categoryLabels = {};
 
 const categoryOf = (item) => item.category || 'misc';
 
-function categoryLabel(cat) {
+// shop tab listing what the shop buys from players (display only, not part of the grid's items)
+const BUYS = '__buys';
+const shopBuys = (inv) => (inv && inv.type === 'shop' && inv.buys ? Object.values(inv.buys) : [])
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+function categoryLabel(cat, inv) {
     if (cat === 'all') return L('ui_all', 'All');
+    if (cat === BUYS) return (inv && inv.buysLabel) || L('ui_we_buy', 'We buy');
+    const own = inv && inv.categoryLabels; // shops name their own categories
+    if (own && own[cat]) return own[cat];
     if (cat === 'misc') return L('ui_misc', 'Misc');
     return categoryLabels[cat] || String(cat).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -114,12 +133,17 @@ function categoryLabel(cat) {
 function renderFilters(invKey) {
     const inv = state[invKey];
     const bar = $(`filter-${invKey}`);
-    const cats = [...new Set(Object.values(inv.map).map(categoryOf))].sort();
+    let cats = [...new Set(Object.values(inv.map).sort((a, b) => a.slot - b.slot).map(categoryOf))];
+    if (!inv.categoryLabels) cats.sort(); // shops keep their configured order
+    if (shopBuys(inv).length) {
+        if (!cats.length && filters[invKey] === 'all') filters[invKey] = BUYS; // buy-only shop
+        cats.push(BUYS);
+    }
     // reset a filter whose category no longer exists in this inventory
     if (filters[invKey] !== 'all' && !cats.includes(filters[invKey])) filters[invKey] = 'all';
     bar.classList.toggle('empty', cats.length < 2); // keeps its space so the panel size never changes
     bar.innerHTML = ['all', ...cats].map((c) =>
-        `<button class="chip${filters[invKey] === c ? ' active' : ''}" data-filter="${esc(c)}" data-inv="${invKey}">${esc(categoryLabel(c))}</button>`
+        `<button class="chip${filters[invKey] === c ? ' active' : ''}" data-filter="${esc(c)}" data-inv="${invKey}">${esc(categoryLabel(c, inv))}</button>`
     ).join('');
 }
 
@@ -130,6 +154,16 @@ function renderGrid(invKey) {
     if (!inv) return;
     renderFilters(invKey);
     const f = filters[invKey];
+    if (f === BUYS) {
+        state.buyList = shopBuys(inv);
+        state.buyList.forEach((b, i) => {
+            const el = slotEl('buys', i + 1, b, false);
+            el.classList.add('buy-only');
+            el.insertAdjacentHTML('beforeend', `<div class="price">$${Number(b.buyPrice).toFixed(2)}</div>`);
+            grid.appendChild(el);
+        });
+        return;
+    }
     let shown = 0;
     for (let s = 1; s <= inv.slots; s++) {
         const item = inv.map[s];
@@ -166,6 +200,7 @@ function render() {
     }
     const other = state.other;
     $('panel-other').classList.toggle('hidden', !other);
+    $('app').classList.toggle('shop-mode', !!(other && other.type === 'shop'));
     if (other) {
         $('other-label').textContent = other.label || L('ui_ground', 'Ground');
         const subs = {
@@ -173,7 +208,7 @@ function render() {
             shop: L('ui_shop_hint', 'Drag to buy · drop here to sell'),
             player: L('ui_searching', 'Searching'),
         };
-        $('other-sub').textContent = subs[other.type] || L('ui_drop_here', 'Drop items here');
+        $('other-sub').textContent = other.subtitle || subs[other.type] || L('ui_drop_here', 'Drop items here');
         $('panel-other').querySelector('.weight').classList.toggle('hidden', other.type === 'shop');
         if (other.type !== 'shop') setWeight('other', other);
         renderGrid('other');
@@ -205,13 +240,14 @@ function renderPlayerInfo(p) {
 }
 
 /* ------------------------------------------------------------------ info */
-function showInfo(item) {
+function showInfo(item, invKey) {
     if (!item) return;
     $('info-title').textContent = item.label;
     $('info-desc').textContent = item.description || '';
     const rows = [`<div><span>${L('ui_weight', 'Weight')}</span>${kg((item.weight || 0) * (item.amount || 1))} ${esc(L('ui_kg', 'kg'))}</div>`];
     if (item.price !== undefined) rows.push(`<div><span>${L('ui_price', 'Price')}</span>$${Number(item.price).toFixed(2)}</div>`);
-    if (item.buyPrice !== undefined) rows.push(`<div><span>${L('ui_sells_for', 'Sells for')}</span>$${Number(item.buyPrice).toFixed(2)}</div>`);
+    const sells = item.buyPrice !== undefined ? item.buyPrice : sellPrice(invKey, item);
+    if (sells !== undefined) rows.push(`<div><span>${L('ui_sells_for', 'Sells for')}</span>$${Number(sells).toFixed(2)}</div>`);
     const info = item.info || {};
     Object.keys(info).forEach((k) => {
         const v = info[k];
@@ -241,6 +277,7 @@ function invId(key) {
 }
 
 function getItem(key, slot) {
+    if (key === 'buys') return (state.buyList || [])[slot - 1]; // tooltip only
     const inv = state[key];
     return inv ? inv.map[slot] : null;
 }
@@ -271,7 +308,7 @@ function move(fromKey, fromSlot, toKey, toSlot, amount) {
 
 document.addEventListener('mousedown', (e) => {
     const el = e.target.closest('.slot.filled');
-    if (!el || !state.open || el.closest('#hotbar')) return;
+    if (!el || !state.open || el.closest('#hotbar') || el.dataset.inv === 'buys') return; // "we buy" tab: display only
     const key = el.dataset.inv, slot = +el.dataset.slot;
     const item = getItem(key, slot);
     if (!item) return;
@@ -299,6 +336,11 @@ document.addEventListener('mousedown', (e) => {
     if (e.ctrlKey) { // quick move
         const target = key === 'player' ? 'other' : 'player';
         if (!state[target]) return;
+        if (state.other.type === 'shop') { // shop: same amount box as dragging
+            if (key === 'other') buyPrompt(slot, item, null);
+            else sellPrompt(slot, item);
+            return;
+        }
         const to = state[target].type === 'shop' ? 1 : firstFreeSlot(target, item.name);
         if (to) move(key, slot, target, to, requestedAmount(item, e.shiftKey, key));
         return;
@@ -317,7 +359,8 @@ document.addEventListener('mousemove', (e) => {
         d.el.classList.add('dragging');
         if (d.key === 'player') $('app').classList.add('drag-player');
         const g = $('ghost');
-        g.innerHTML = `<img src="${esc(imgSrc(d.item))}"><div class="qty">x${d.amount}</div>`;
+        const fromShop = state.other && state.other.type === 'shop'; // buy / sell: amount asked on drop
+        g.innerHTML = `<img src="${esc(imgSrc(d.item))}"><div class="qty">${fromShop ? '' : 'x' + d.amount}</div>`;
         g.classList.remove('hidden');
     }
     const g = $('ghost'); // centred on the cursor by CSS transform
@@ -341,6 +384,13 @@ document.addEventListener('mouseup', (e) => {
 
     const over = document.elementFromPoint(e.clientX, e.clientY);
     if (!over) return;
+
+    // shop open: drop anywhere on the other panel, ask the amount, then buy / sell
+    if (state.other && state.other.type === 'shop') {
+        if (d.key === 'other' && over.closest('#panel-player')) return buyPrompt(d.slot, d.item, over.closest('#app .slot'));
+        if (d.key === 'player' && over.closest('#panel-other')) return sellPrompt(d.slot, d.item);
+        if (d.key === 'other') return;
+    }
 
     const zone = over.closest('.drop-zone');
     if (zone) {
@@ -366,7 +416,7 @@ document.addEventListener('dblclick', (e) => {
 document.addEventListener('mouseover', (e) => {
     const el = e.target.closest('#app .slot.filled');
     if (!el || !state.open || state.drag || !$('ctx').classList.contains('hidden')) return hideInfo();
-    showInfo(getItem(el.dataset.inv, +el.dataset.slot));
+    showInfo(getItem(el.dataset.inv, +el.dataset.slot), el.dataset.inv);
     placeInfo(e.clientX, e.clientY);
 });
 
@@ -425,13 +475,7 @@ function buildMenu(key, slot, item) {
     const entries = [];
     const isShop = key === 'other' && other && other.type === 'shop';
 
-    if (isShop) {
-        entries.push({ label: L('ui_buy', 'Buy'), sub: amountSub(item, (n) => {
-            const to = firstFreeSlot('player', item.name);
-            if (to) move('other', slot, 'player', to, n);
-        }, { max: item.amount || 1000, noAll: !item.amount, noHalf: true }) });
-        return entries;
-    }
+    if (isShop) return entries; // buying is done by dragging (amount box on drop)
 
     if (key === 'player') {
         if (item.useable || item.type === 'weapon' || item.type === 'weapon_thrown' || item.type === 'equipment') {
@@ -446,9 +490,7 @@ function buildMenu(key, slot, item) {
             const to = firstFreeSlot(otherKey, item.name);
             if (to) move(key, slot, otherKey, to, n);
         }) });
-    } else if (key === 'player' && other && other.type === 'shop') {
-        entries.push({ label: L('ui_sell', 'Sell'), sub: amountSub(item, (n) => move('player', slot, 'other', 1, n)) });
-    }
+    } // selling to a shop is done by dragging (amount box on drop)
 
     if (item.info && item.info.serie) {
         entries.push({ label: L('ui_copy_serial', 'Copy serial'), run: () => copyText(item.info.serie) });
@@ -521,9 +563,29 @@ document.addEventListener('mousedown', (e) => {
 
 /* ------------------------------------------------------------------ amount modal */
 let amountCb = null, amountMax = 1, amountDecimal = false;
-// opts: { title, desc, value, image, decimal } — decimal: money (cents allowed)
+// shop buy / sell: { unit, weight } — total price and (buying) total weight under the input
+let amountTotal = null;
+
+function updateAmountTotal() {
+    $('amount-modal-summary').classList.toggle('hidden', !amountTotal);
+    if (!amountTotal) return;
+    const n = Math.min(parseInt($('amount-modal-input').value, 10) || 0, amountMax);
+    $('amount-modal-total').textContent = money(n * amountTotal.unit);
+    const showWeight = amountTotal.weight !== undefined;
+    $('amount-modal-weight-row').classList.toggle('hidden', !showWeight);
+    if (!showWeight) return;
+    const p = state.player;
+    const free = p ? Math.max(0, p.maxWeight - totalWeight(p.map)) : 0;
+    const w = $('amount-modal-weight');
+    w.innerHTML = `${kg(n * amountTotal.weight)} ${esc(L('ui_kg', 'kg'))}<small>(${esc(L('ui_free', 'free'))} ${kg(free)} ${esc(L('ui_kg', 'kg'))})</small>`;
+    w.classList.toggle('over', n * amountTotal.weight > free);
+}
+$('amount-modal-input').addEventListener('input', updateAmountTotal);
+
+// opts: { title, desc, value, image, decimal, unitPrice, unitWeight } — decimal: money (cents allowed)
 function openAmountModal(item, max, cb, opts = {}) {
     amountCb = cb; amountMax = max; amountDecimal = !!opts.decimal;
+    amountTotal = opts.unitPrice !== undefined ? { unit: opts.unitPrice, weight: opts.unitWeight } : null;
     $('amount-modal-title').textContent = opts.title || item.label;
     $('amount-modal-desc').textContent = opts.desc || '';
     $('amount-modal-desc').classList.toggle('hidden', !opts.desc);
@@ -537,6 +599,7 @@ function openAmountModal(item, max, cb, opts = {}) {
     input.step = amountDecimal ? '0.01' : '1';
     input.min = amountDecimal ? '0.01' : '1';
     input.max = max; input.value = opts.value || 1;
+    updateAmountTotal();
     $('amount-modal').classList.remove('hidden');
     setTimeout(() => { input.focus(); input.select(); }, 0);
 }
@@ -655,7 +718,42 @@ function confirmDrop(slot, item, amount) {
         image: true,
     });
 }
-function closeAmountModal() { $('amount-modal').classList.add('hidden'); amountCb = null; }
+// buy into the slot under the cursor when it can take the item, otherwise the first free one
+function buyPrompt(shopSlot, item, targetEl) {
+    const at = targetEl && targetEl.dataset.inv === 'player' ? +targetEl.dataset.slot : null;
+    const held = at && getItem('player', at);
+    const to = at && (!held || (held.name === item.name && !held.unique)) ? at : firstFreeSlot('player', item.name);
+    if (!to) return;
+    const buy = (n) => move('other', shopSlot, 'player', to, n);
+    const unit = Number(item.price) || 0;
+    // unique items (weapons) are bought one at a time by the server
+    openAmountModal(item, item.unique ? 1 : (item.amount || 1000), buy, {
+        title: L('ui_buy', 'Buy'),
+        desc: `${item.label} · ${money(unit)} ${L('ui_each', 'each')}`,
+        value: 1,
+        image: true,
+        unitPrice: unit,
+        unitWeight: item.weight || 0,
+    });
+}
+
+// player -> shop; the shop pays less for worn items, same rule as the server
+function sellPrompt(slot, item) {
+    const sell = (n) => move('player', slot, 'other', 1, n);
+    const base = sellPrice('player', item);
+    if (base === undefined) return sell(item.amount); // the server answers "won't buy"
+    const q = item.info && typeof item.info.quality === 'number' ? item.info.quality : 100;
+    const unit = Math.floor(base * (q / 100) * 100 + 0.5) / 100;
+    openAmountModal(item, item.amount || 1, sell, {
+        title: L('ui_sell', 'Sell'),
+        desc: `${item.label} · ${money(unit)} ${L('ui_each', 'each')}`,
+        value: item.amount,
+        image: true,
+        unitPrice: unit,
+    });
+}
+
+function closeAmountModal() { $('amount-modal').classList.add('hidden'); amountCb = null; amountTotal = null; }
 function confirmAmountModal() {
     const raw = $('amount-modal-input').value;
     const n = amountDecimal ? Math.floor(parseFloat(raw) * 100 + 1e-6) / 100 : parseInt(raw, 10);

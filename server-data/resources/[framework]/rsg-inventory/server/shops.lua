@@ -38,11 +38,29 @@ local function SetupItems(name, list, persistent)
             built.maxStock     = it.maxStock
             built.restock      = it.restock
             built.minQuality   = it.minQuality
+            built.category     = it.category or built.category -- shop-defined filter chip
             items[slot] = built
             slot = slot + 1
         end
     end
     return items, slot - 1
+end
+
+-- buy list: items the shop buys from players without selling them (not shown in the grid)
+-- { { name, buyPrice, minQuality? } } -> { [name] = { buyPrice, minQuality } }
+local function SetupBuys(list)
+    if not list then return nil end
+    local buys = {}
+    for _, it in pairs(list) do
+        local s = it.name and RSGCore.Shared.Items[it.name:lower()]
+        if s and it.buyPrice then
+            buys[s.name] = {
+                buyPrice = it.buyPrice, minQuality = it.minQuality,
+                name = s.name, label = s.label, image = s.image, description = s.description, weight = s.weight, -- shown in the shop's "we buy" tab
+            }
+        end
+    end
+    return buys
 end
 
 local function Register(name, data)
@@ -53,6 +71,9 @@ local function Register(name, data)
         shop.items, shop.slots = items, math.max(count, 1)
         if data.label then shop.label = data.label end
         if data.persistentStock ~= nil then shop.persistentStock = data.persistentStock end
+        shop.categoryLabels = data.categoryLabels
+        shop.buys = SetupBuys(data.buys)
+        shop.buysLabel, shop.subtitle = data.buysLabel, data.subtitle
         return shop
     end
     shop = {
@@ -60,6 +81,10 @@ local function Register(name, data)
         slots = math.max(count, 1), maxWeight = 1e12, items = items,
         shopCoords = data.coords and vector3(data.coords.x, data.coords.y, data.coords.z) or nil,
         persistentStock = data.persistentStock, currency = data.currency or 'cash',
+        categoryLabels = data.categoryLabels, -- { [category] = 'Display name' }
+        buys = SetupBuys(data.buys),
+        buysLabel = data.buysLabel, -- name of the "we buy" tab (default: ui_we_buy locale)
+        subtitle = data.subtitle,   -- line under the shop name (default: ui_shop_hint locale)
     }
     InvCore.Inventories[id] = shop
     return shop
@@ -136,6 +161,11 @@ function Shops.Buy(src, shop, slot, amount, toSlot)
     end
     if it.amount then it.amount = it.amount - amount end
     Debug(src, 'bought %sx %s for %s', amount, it.name, price)
+    -- other resources (e.g. bilto_shop) can show their own receipt
+    TriggerEvent('rsg-inventory:server:shopTransaction', src, {
+        shop = shop.name, kind = 'buy', item = it.name, label = it.label,
+        amount = amount, total = price, currency = shop.currency,
+    })
 end
 
 function Shops.Sell(src, shop, playerSlot, amount)
@@ -145,9 +175,11 @@ function Shops.Sell(src, shop, playerSlot, amount)
     amount = math.tointeger(tonumber(amount)) or item.amount
     if amount < 1 or amount > item.amount then amount = item.amount end
 
-    local entry
-    for _, it in pairs(shop.items) do
-        if it.name == item.name and it.buyPrice then entry = it break end
+    local entry = shop.buys and shop.buys[item.name]
+    if not entry then
+        for _, it in pairs(shop.items) do
+            if it.name == item.name and it.buyPrice then entry = it break end
+        end
     end
     if not entry then return notify(src, 'shop_wont_buy') end
     local quality = (item.info and tonumber(item.info.quality)) or 100
@@ -161,6 +193,10 @@ function Shops.Sell(src, shop, playerSlot, amount)
     if entry.amount then entry.amount = entry.amount + amount end
     local Player = RSGCore.Functions.GetPlayer(src)
     if Player then Player.Functions.AddMoney(shop.currency, payout, 'shop-sell') end
+    TriggerEvent('rsg-inventory:server:shopTransaction', src, {
+        shop = shop.name, kind = 'sell', item = item.name, label = item.label,
+        amount = amount, total = payout, currency = shop.currency,
+    })
 end
 
 --------------------------------------------------------------------------------
