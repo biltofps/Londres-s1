@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bilto_hud</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="grid"></div>
+    <div id="guide-v" class="guide v"></div>
+    <div id="guide-h" class="guide h"></div>
+
+    <div id="hud" class="hidden"></div>
+
+    <aside id="panel">
+        <header class="panel-head">
+            <span class="panel-title">Editor de HUD</span>
+            <!-- acoes do editor ficam dentro da propria janela -->
+            <div id="toolbar">
+                <button class="tb-btn" data-action="undo" title="Desfazer (Ctrl+Z)"></button>
+                <button class="tb-btn" data-action="redo" title="Refazer (Ctrl+Y)"></button>
+                <span class="tb-sep"></span>
+                <button class="tb-btn" data-action="grid" title="Mostrar grade"></button>
+                <button class="tb-btn" data-action="snap" title="Grudar na grade e alinhar com outros icones"></button>
+                <span class="tb-sep"></span>
+                <button class="tb-btn" data-action="arrange" title="Arruma as posicoes na tela sem mudar o visual (nada fica em cima de nada)"></button>
+                <button class="tb-btn" data-action="reset" title="Volta tudo ao modelo padrao, inclusive escala e opacidade"></button>
+                <span class="tb-sep"></span>
+                <button class="tb-btn" data-action="cancel" title="Descartar alteracoes (ESC)"></button>
+                <button class="tb-btn primary" data-action="save" title="Salvar layout"></button>
+            </div>
+            <button class="icon-btn" data-action="collapse" title="Minimizar painel"></button>
+        </header>
+        <div class="panel-main">
+            <nav class="panel-tabs">
+                <button class="tab" data-tab="presets"><span class="tab-ico" data-ui="layout"></span>Modelos</button>
+                <button class="tab" data-tab="mine"><span class="tab-ico" data-ui="bookmark"></span>Presets</button>
+                <button class="tab" data-tab="elements"><span class="tab-ico" data-ui="layers"></span>Elementos</button>
+                <button class="tab" data-tab="global"><span class="tab-ico" data-ui="sliders"></span>Geral</button>
+            </nav>
+            <div class="panel-body" id="panel-body"></div>
+        </div>
+        <footer class="panel-foot">
+            Arraste os icones na tela &middot; Setas movem (Shift = rapido) &middot; Ctrl+Z desfaz &middot; ESC cancela
+        </footer>
+    </aside>
+
+    <script src="icons.js"></script>
+    <script src="presets.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
