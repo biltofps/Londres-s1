@@ -1,11 +1,18 @@
 <html>
   <head>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="style.css" rel="stylesheet" type="text/css" />
   </head>
   <body>
     <div id="targeting-crosshair">
-      <img id="targetingImage" src="assets/untarget.png" alt="Targeting Crosshair" />
+      <svg id="targetingImage" viewBox="0 0 24 24" aria-hidden="true">
+        <path class="eye-lid" d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" />
+        <circle class="eye-iris" cx="12" cy="12" r="3.2" />
+        <circle class="eye-pupil" cx="12" cy="12" r="1.2" />
+      </svg>
     </div>
     <div id="options-wrapper"></div>
     <script defer type="module" src="js/main.js"></script>
