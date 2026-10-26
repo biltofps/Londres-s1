@@ -1,4 +1,4 @@
-﻿const app = document.getElementById('app');
+const app = document.getElementById('app');
 const panelTitle = document.getElementById('panelTitle');
 const closeBtn = document.getElementById('closeBtn');
 const refreshBtn = document.getElementById('refreshBtn');
@@ -20,6 +20,8 @@ const openAddMoneyModalBtn = document.getElementById('openAddMoneyModalBtn');
 const openRemoveMoneyModalBtn = document.getElementById('openRemoveMoneyModalBtn');
 const openAddWeightModalBtn = document.getElementById('openAddWeightModalBtn');
 const openAddSlotsModalBtn = document.getElementById('openAddSlotsModalBtn');
+const openRemoveWeightModalBtn = document.getElementById('openRemoveWeightModalBtn');
+const openRemoveSlotsModalBtn = document.getElementById('openRemoveSlotsModalBtn');
 const openRenamePlayerModalBtn = document.getElementById('openRenamePlayerModalBtn');
 const openHeightPlayerModalBtn = document.getElementById('openHeightPlayerModalBtn');
 const clearInventoryBtn = document.getElementById('clearInventoryBtn');
@@ -327,7 +329,8 @@ const state = {
         mode: 'add'
     },
     supportAdjustModal: {
-        mode: 'weight'
+        mode: 'weight',
+        operation: 'add'
     },
     heightPlayerModal: {
         preset: '100'
@@ -1096,6 +1099,8 @@ function getPermissionDescription(key) {
         removeMoney: t('permission_desc_removeMoney', {}, 'Remover dinheiro do player.'),
         addWeight: t('permission_desc_addWeight', {}, 'Adicionar capacidade de peso ao player.'),
         addSlots: t('permission_desc_addSlots', {}, 'Adicionar slots de inventario ao player.'),
+        removeWeight: t('permission_desc_removeWeight', {}, 'Remover capacidade de peso do player.'),
+        removeSlots: t('permission_desc_removeSlots', {}, 'Remover slots de inventario do player.'),
         renameCharacter: t('permission_desc_renameCharacter', {}, 'Trocar nome e sobrenome do personagem.'),
         changeHeight: t('permission_desc_changeHeight', {}, 'Alterar a altura do personagem no banco de dados.'),
         clearInventory: t('permission_desc_clearInventory', {}, 'Limpar todo o inventario do player.'),
@@ -2378,6 +2383,7 @@ function syncSupportActionSelection() {
     const isRemoveMode = state.moneyModal.mode === 'remove';
     const supportAdjustVisible = isVisible(supportAdjustModal);
     const isSlotsMode = state.supportAdjustModal && state.supportAdjustModal.mode === 'slots';
+    const isRemoveAdjust = state.supportAdjustModal && state.supportAdjustModal.operation === 'remove';
 
     if (openAddMoneyModalBtn) {
         openAddMoneyModalBtn.classList.toggle('is-selected', moneyModalVisible && !isRemoveMode);
@@ -2405,12 +2411,20 @@ function syncSupportActionSelection() {
         clearInventoryBtn.disabled = !hasSelectedPlayer;
     }
     if (openAddWeightModalBtn) {
-        openAddWeightModalBtn.classList.toggle('is-selected', supportAdjustVisible && !isSlotsMode);
+        openAddWeightModalBtn.classList.toggle('is-selected', supportAdjustVisible && !isSlotsMode && !isRemoveAdjust);
         openAddWeightModalBtn.disabled = !hasSelectedPlayer;
     }
     if (openAddSlotsModalBtn) {
-        openAddSlotsModalBtn.classList.toggle('is-selected', supportAdjustVisible && isSlotsMode);
+        openAddSlotsModalBtn.classList.toggle('is-selected', supportAdjustVisible && isSlotsMode && !isRemoveAdjust);
         openAddSlotsModalBtn.disabled = !hasSelectedPlayer;
+    }
+    if (openRemoveWeightModalBtn) {
+        openRemoveWeightModalBtn.classList.toggle('is-selected', supportAdjustVisible && !isSlotsMode && isRemoveAdjust);
+        openRemoveWeightModalBtn.disabled = !hasSelectedPlayer;
+    }
+    if (openRemoveSlotsModalBtn) {
+        openRemoveSlotsModalBtn.classList.toggle('is-selected', supportAdjustVisible && isSlotsMode && isRemoveAdjust);
+        openRemoveSlotsModalBtn.disabled = !hasSelectedPlayer;
     }
     if (openMessageModalBtn) {
         openMessageModalBtn.disabled = !hasSelectedPlayer;
@@ -2701,16 +2715,28 @@ function renderMoneyModalInfo() {
     return;
 }
 
+// Labels and action name for the weight/slots modal in add or remove mode.
+function getSupportAdjustLabels(mode, isRemove) {
+    if (mode === 'slots') {
+        return isRemove
+            ? { title: t('modal_remove_slots_title', {}, 'Remover Slots'), apply: t('modal_remove_slots_apply', {}, 'Remover Slots'), action: 'removeSlots' }
+            : { title: t('modal_add_slots_title', {}, 'Adicionar Slots'), apply: t('modal_add_slots_apply', {}, 'Adicionar Slots'), action: 'addSlots' };
+    }
+    return isRemove
+        ? { title: t('modal_remove_weight_title', {}, 'Remover Peso'), apply: t('modal_remove_weight_apply', {}, 'Remover Peso'), action: 'removeWeight' }
+        : { title: t('modal_add_weight_title', {}, 'Adicionar Peso'), apply: t('modal_add_weight_apply', {}, 'Adicionar Peso'), action: 'addWeight' };
+}
+
 function renderSupportAdjustModalInfo() {
     const player = getSelectedPlayer();
     const mode = state.supportAdjustModal && state.supportAdjustModal.mode === 'slots' ? 'slots' : 'weight';
     const inventory = player && player.inventory && typeof player.inventory === 'object' ? player.inventory : {};
     const isSlots = mode === 'slots';
+    const isRemove = state.supportAdjustModal && state.supportAdjustModal.operation === 'remove';
+    const title = getSupportAdjustLabels(mode, isRemove);
 
     if (supportAdjustModalTitle) {
-        supportAdjustModalTitle.textContent = isSlots
-            ? t('modal_add_slots_title', {}, 'Adicionar Slots')
-            : t('modal_add_weight_title', {}, 'Adicionar Peso');
+        supportAdjustModalTitle.textContent = title.title;
     }
 
     if (supportAdjustAmountLabel) {
@@ -2720,9 +2746,7 @@ function renderSupportAdjustModalInfo() {
     }
 
     if (supportAdjustModalApplyBtn) {
-        supportAdjustModalApplyBtn.textContent = isSlots
-            ? t('modal_add_slots_apply', {}, 'Adicionar Slots')
-            : t('modal_add_weight_apply', {}, 'Adicionar Peso');
+        supportAdjustModalApplyBtn.textContent = title.apply;
     }
 
     if (supportAdjustAmountInput) {
@@ -4102,7 +4126,7 @@ function openMoneyModal(mode) {
     openModal(moneyModal, mode === 'remove' ? 'removeMoney' : 'addMoney');
 }
 
-function openSupportAdjustModal(mode) {
+function openSupportAdjustModal(mode, operation = 'add') {
     logModalDebug('openSupportAdjustModal:request', {
         mode,
         selectedSource: state.selectedSource
@@ -4114,12 +4138,13 @@ function openSupportAdjustModal(mode) {
     }
 
     state.supportAdjustModal.mode = mode === 'slots' ? 'slots' : 'weight';
+    state.supportAdjustModal.operation = operation === 'remove' ? 'remove' : 'add';
     if (supportAdjustAmountInput) {
         supportAdjustAmountInput.value = '1';
     }
 
     renderSupportAdjustModalInfo();
-    openModal(supportAdjustModal, state.supportAdjustModal.mode === 'slots' ? 'addSlots' : 'addWeight');
+    openModal(supportAdjustModal, getSupportAdjustLabels(state.supportAdjustModal.mode, state.supportAdjustModal.operation === 'remove').action);
 }
 
 function openRenamePlayerModal() {
@@ -4642,6 +4667,8 @@ bindEvent(openAddMoneyModalBtn, 'click', () => openMoneyModal('add'));
 bindEvent(openRemoveMoneyModalBtn, 'click', () => openMoneyModal('remove'));
 bindEvent(openAddWeightModalBtn, 'click', () => openSupportAdjustModal('weight'));
 bindEvent(openAddSlotsModalBtn, 'click', () => openSupportAdjustModal('slots'));
+bindEvent(openRemoveWeightModalBtn, 'click', () => openSupportAdjustModal('weight', 'remove'));
+bindEvent(openRemoveSlotsModalBtn, 'click', () => openSupportAdjustModal('slots', 'remove'));
 bindEvent(openRenamePlayerModalBtn, 'click', openRenamePlayerModal);
 bindEvent(openHeightPlayerModalBtn, 'click', openHeightPlayerModal);
 bindEvent(openMessageModalBtn, 'click', openMessageModal);
@@ -5561,34 +5588,39 @@ bindEvent(supportAdjustModalApplyBtn, 'click', async () => {
     }
 
     const inventory = player.inventory || {};
+    const isRemove = state.supportAdjustModal.operation === 'remove';
+    const labels = getSupportAdjustLabels(mode, isRemove);
+    const verb = isRemove ? 'remover' : 'adicionar';
     if (mode === 'slots') {
         openCriticalConfirmModal({
-            title: t('modal_add_slots_title', {}, 'Adicionar Slots'),
-            summary: `Voce gostaria de adicionar slots para ${getSelectedPlayerDisplayName()}?`,
+            title: labels.title,
+            summary: `Voce gostaria de ${verb} slots ${isRemove ? 'de' : 'para'} ${getSelectedPlayerDisplayName()}?`,
             badge: 'SLOTS',
-            confirmLabel: t('modal_add_slots_apply', {}, 'Adicionar Slots'),
+            variant: isRemove ? 'remove-money' : 'default',
+            confirmLabel: labels.apply,
             details: [
                 `${t('modal_player_label', {}, 'Jogador')}: ${getSelectedPlayerIdentityLabel()}`,
                 `${t('field_slots_total', {}, 'Slots Totais')}: ${formatInteger(valueOr(inventory.maxSlots, 0))}`,
-                `${t('modal_amount_label', {}, 'Valor')}: ${formatInteger(amount)}`
+                `${t('modal_amount_label', {}, 'Valor')}: ${isRemove ? '-' : ''}${formatInteger(amount)}`
             ],
-            onConfirm: () => executeAction('addSlots', { amount }),
+            onConfirm: () => executeAction(labels.action, { amount }),
             closeOnSuccess: [supportAdjustModal]
         });
         return;
     }
 
     openCriticalConfirmModal({
-        title: t('modal_add_weight_title', {}, 'Adicionar Peso'),
-        summary: `Voce gostaria de adicionar peso para ${getSelectedPlayerDisplayName()}?`,
+        title: labels.title,
+        summary: `Voce gostaria de ${verb} peso ${isRemove ? 'de' : 'para'} ${getSelectedPlayerDisplayName()}?`,
         badge: 'KG',
-        confirmLabel: t('modal_add_weight_apply', {}, 'Adicionar Peso'),
+        variant: isRemove ? 'remove-money' : 'default',
+        confirmLabel: labels.apply,
         details: [
             `${t('modal_player_label', {}, 'Jogador')}: ${getSelectedPlayerIdentityLabel()}`,
             `${t('field_kg_total', {}, 'KG Total')}: ${formatKgFromUnits(valueOr(inventory.maxWeight, 0))}`,
-            `${t('modal_amount_label', {}, 'Valor')}: ${formatKgFromUnits(amount)}`
+            `${t('modal_amount_label', {}, 'Valor')}: ${isRemove ? '-' : ''}${formatKgFromUnits(amount)}`
         ],
-        onConfirm: () => executeAction('addWeight', { amount }),
+        onConfirm: () => executeAction(labels.action, { amount }),
         closeOnSuccess: [supportAdjustModal]
     });
 });

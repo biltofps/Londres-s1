@@ -374,6 +374,8 @@ PANEL_ACTION_DEFINITIONS_DEFAULT = {
     { key = 'removeMoney', requiredPermission = 'removeMoney', inCatalog = true },
     { key = 'addWeight', requiredPermission = 'addWeight', inCatalog = true },
     { key = 'addSlots', requiredPermission = 'addSlots', inCatalog = true },
+    { key = 'removeWeight', requiredPermission = 'removeWeight', inCatalog = true },
+    { key = 'removeSlots', requiredPermission = 'removeSlots', inCatalog = true },
     { key = 'renameCharacter', requiredPermission = 'renameCharacter', inCatalog = true },
     { key = 'changeHeight', requiredPermission = 'changeHeight', inCatalog = true },
     { key = 'clearInventory', requiredPermission = 'clearInventory', inCatalog = true },
@@ -412,6 +414,8 @@ local PANEL_ACTION_DEFAULT_LABEL_KEYS = {
     removeMoney = 'action_remove_money_menu',
     addWeight = 'action_add_weight_menu',
     addSlots = 'action_add_slots_menu',
+    removeWeight = 'action_remove_weight_menu',
+    removeSlots = 'action_remove_slots_menu',
     renameCharacter = 'action_rename_player',
     changeHeight = 'action_change_height',
     clearInventory = 'action_clear_inventory',
@@ -1844,6 +1848,8 @@ function BitinhoAdmin.sendActionWebhook(entry)
         kick = true,
         removeJob = true,
         removeMoney = true,
+        removeWeight = true,
+        removeSlots = true,
         removeBan = true,
         clearInventory = true,
         deleteCharacterByCitizenid = true,
@@ -4721,6 +4727,112 @@ local function actionAddSlots(adminSource, payload)
     }, 'Voce adicionou {amount} slots para {targetName} [{targetSource}]. Novo limite: {total} slots.')
 end
 
+-- kept on BitinhoAdmin (not chunk-level locals) because the main chunk is at Lua's 200-local limit
+function BitinhoAdmin.ActionRemoveWeight(adminSource, payload)
+    local parsedTarget, player, err = validateTarget(payload.targetSource)
+    if not parsedTarget then
+        return false, err
+    end
+
+    local amount = math.floor(tonumber(payload.amount) or 0)
+    if amount <= 0 then
+        return false, S('weight_amount_min', nil, 'Valor de peso deve ser maior que zero.')
+    end
+
+    local maxAmount = math.floor(tonumber(Config.Limits and Config.Limits.addWeightAmountMax) or 100000000)
+    if amount > maxAmount then
+        return false, S('weight_remove_amount_max', {
+            maxAmount = maxAmount
+        }, 'Valor maximo de peso por remocao: {maxAmount}.')
+    end
+
+    -- the new limit can't be lower than what the player is already carrying
+    local capacity = getInventoryCapacitySnapshot(player.PlayerData)
+    local currentWeight = math.floor(tonumber(player.PlayerData and player.PlayerData.weight) or 0)
+    local newWeight = currentWeight - amount
+    local minWeight = math.max(1, math.ceil(capacity.usedWeight))
+    if newWeight < minWeight then
+        return false, S('weight_remove_below_used', {
+            used = ('%.2f'):format(capacity.usedWeight / 1000.0),
+            maxRemove = ('%.2f'):format(math.max(currentWeight - minWeight, 0) / 1000.0)
+        }, 'O jogador carrega {used} KG. Voce pode remover no maximo {maxRemove} KG.')
+    end
+
+    RSGCore.Functions.ChangeWeight(parsedTarget, newWeight)
+    if player.Functions and type(player.Functions.Save) == 'function' then
+        player.Functions.Save()
+    end
+
+    local targetName = getCharacterNameSafe(parsedTarget)
+    notifyTargetAction(parsedTarget, adminSource, S('removeweight_target_notify', {
+        amount = ('%.2f'):format(amount / 1000.0)
+    }, 'Seu limite de peso foi reduzido em {amount} KG por um administrador.'), 'warn')
+    pushAction(adminSource, 'removeWeight', parsedTarget, ('-%s => %s'):format(amount, newWeight))
+    return true, S('removeweight_success', {
+        amount = ('%.2f'):format(amount / 1000.0),
+        total = ('%.2f'):format(newWeight / 1000.0),
+        targetName = targetName,
+        targetSource = parsedTarget
+    }, 'Voce removeu {amount} KG de {targetName} [{targetSource}]. Novo limite: {total} KG.')
+end
+
+function BitinhoAdmin.ActionRemoveSlots(adminSource, payload)
+    local parsedTarget, player, err = validateTarget(payload.targetSource)
+    if not parsedTarget then
+        return false, err
+    end
+
+    local amount = math.floor(tonumber(payload.amount) or 0)
+    if amount <= 0 then
+        return false, S('slots_amount_min', nil, 'Valor de slots deve ser maior que zero.')
+    end
+
+    local maxAmount = math.floor(tonumber(Config.Limits and Config.Limits.addSlotsAmountMax) or 1000)
+    if amount > maxAmount then
+        return false, S('slots_remove_amount_max', {
+            maxAmount = maxAmount
+        }, 'Valor maximo de slots por remocao: {maxAmount}.')
+    end
+
+    -- the new limit can't cut off a slot that still has an item in it
+    local highestUsedSlot = 0
+    for key, item in pairs(player.PlayerData and player.PlayerData.items or {}) do
+        if type(item) == 'table' and (tonumber(item.amount) or 0) > 0 then
+            local slot = math.floor(tonumber(item.slot) or tonumber(key) or 0)
+            if slot > highestUsedSlot then
+                highestUsedSlot = slot
+            end
+        end
+    end
+
+    local currentSlots = math.floor(tonumber(player.PlayerData and player.PlayerData.slots) or 0)
+    local newSlots = currentSlots - amount
+    local minSlots = math.max(1, highestUsedSlot)
+    if newSlots < minSlots then
+        return false, S('slots_remove_below_used', {
+            slot = highestUsedSlot,
+            maxRemove = math.max(currentSlots - minSlots, 0)
+        }, 'O jogador tem item ate o slot {slot}. Voce pode remover no maximo {maxRemove} slots.')
+    end
+
+    RSGCore.Functions.ChangeSlots(parsedTarget, newSlots)
+    if player.Functions and type(player.Functions.Save) == 'function' then
+        player.Functions.Save()
+    end
+
+    local targetName = getCharacterNameSafe(parsedTarget)
+    notifyTargetAction(parsedTarget, adminSource, S('removeslots_target_notify', {
+        amount = amount
+    }, 'Seus slots foram reduzidos em {amount} por um administrador.'), 'warn')
+    pushAction(adminSource, 'removeSlots', parsedTarget, ('-%s => %s'):format(amount, newSlots))
+    return true, S('removeslots_success', {
+        amount = amount,
+        total = newSlots,
+        targetName = targetName,
+        targetSource = parsedTarget
+    }, 'Voce removeu {amount} slots de {targetName} [{targetSource}]. Novo limite: {total} slots.')
+end
+
 local function parseRequestedPanelPermissions(rawPermissions)
     if type(rawPermissions) ~= 'table' then
         return nil, S('permission_payload_invalid', nil, 'Permissoes invalidas no payload.')
@@ -5073,6 +5185,8 @@ local actionMap = {
     removeMoney = actionRemoveMoney,
     addWeight = actionAddWeight,
     addSlots = actionAddSlots,
+    removeWeight = BitinhoAdmin.ActionRemoveWeight,
+    removeSlots = BitinhoAdmin.ActionRemoveSlots,
     renameCharacter = actionRenameCharacter,
     changeHeight = actionChangeHeight,
     clearInventory = actionClearInventory,

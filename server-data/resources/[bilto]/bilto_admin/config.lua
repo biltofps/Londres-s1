@@ -32,6 +32,8 @@ Config.FrameworkRoles = {
             removeMoney = true,
             addWeight = true,
             addSlots = true,
+            removeWeight = true,
+            removeSlots = true,
             spawnAdminHorse = true
         }
     },
@@ -135,6 +137,8 @@ Config.Webhooks = {
     removeMoney = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
     addWeight = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
     addSlots = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
+    removeWeight = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
+    removeSlots = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
     renameCharacter = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
     changeHeight = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
     clearInventory = 'https://discord.com/api/webhooks/1503625558087569478/AKgQ_4zCI5ha1VEZctbifr-00bfSbg7Wufr0ijGpbz96J1wTdcnWw795pjMt3pcoNLMc',
