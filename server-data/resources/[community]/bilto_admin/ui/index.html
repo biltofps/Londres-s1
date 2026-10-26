@@ -1,0 +1,716 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title data-i18n="panel_title">Bitinho Admin</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body data-theme="mono">
+    <main id="app" class="app hidden theme-mono">
+        <div class="bg-layer"></div>
+        <div class="shell admin-shell">
+            <aside class="sidebar admin-sidebar">
+                <div class="brand sidebar-brand">
+                    <div class="brand-badge">ADM</div>
+                    <div>
+                        <h1 id="panelTitle" data-i18n="panel_title">Bitinho Admin</h1>
+                        <p data-i18n="brand_subtitle">Painel administrativo completo</p>
+                    </div>
+                </div>
+
+                <nav class="side-nav sidebar-nav">
+                    <button class="nav-btn active" data-panel-target="dashboard" data-i18n="nav_dashboard">Dashboard</button>
+                    <button class="nav-btn" data-panel-target="players" data-i18n="nav_players">Players</button>
+                    <button class="nav-btn" data-panel-target="bannedPlayers" data-requires-permission="viewBannedPlayers" data-i18n="nav_banned_players">Players Banidos</button>
+                    <button class="nav-btn" data-panel-target="permissions" data-requires-permission="manage_permissions" data-i18n="nav_permissions">Permissoes</button>
+                    <button class="nav-btn" data-panel-target="utilities" data-requires-permission="viewUtilitiesPanel" data-i18n="nav_utilities">Utilidades</button>
+                    <button class="nav-btn" data-panel-target="teleports" data-requires-permission="teleportToCoords" data-i18n="nav_teleports">Teleports</button>
+                </nav>
+
+            </aside>
+
+            <section class="content admin-main">
+                <header class="topbar admin-topbar">
+                    <div class="topbar-copy">
+                        <h2 data-i18n="panel_title">Bitinho Admin</h2>
+                        <p data-i18n="brand_subtitle">Painel administrativo completo</p>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button id="refreshBtn" type="button" data-i18n="top_refresh">Atualizar</button>
+                        <button id="closeBtn" type="button" class="danger" data-i18n="top_close">Fechar</button>
+                    </div>
+                </header>
+
+                <section class="panel active" data-panel="dashboard">
+                    <div class="card-grid">
+                        <article class="stat-card"><span data-i18n="dashboard_online">Online</span><strong id="metricOnline">0</strong></article>
+                        <article class="stat-card"><span data-i18n="dashboard_max_slots">Slots Max</span><strong id="metricMax">0</strong></article>
+                        <article class="stat-card"><span data-i18n="dashboard_staff_online">Staff Online</span><strong id="metricStaff">0</strong></article>
+                        <article class="stat-card"><span data-i18n="dashboard_dead">Mortos</span><strong id="metricDead">0</strong></article>
+                        <article class="stat-card"><span data-i18n="dashboard_avg_ping">Ping Medio</span><strong id="metricPing">0</strong></article>
+                        <article class="stat-card"><span data-i18n="dashboard_updated">Atualizado</span><strong id="metricUpdated">--</strong></article>
+                    </div>
+                    <div class="totals-grid">
+                        <article class="total-card"><span data-i18n="dashboard_money_global">Dinheiro total do servidor</span><strong id="metricBank">0</strong></article>
+                    </div>
+                    <section class="panel-card dashboard-rich-block">
+                        <h3 data-i18n="dashboard_top_rich_title">Top 10 - Jogadores Mais Ricos</h3>
+                        <div class="table-wrap">
+                            <table class="players-table" id="topRichPlayersTable">
+                                <thead id="topRichPlayersHead"></thead>
+                                <tbody id="topRichPlayersBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="panel-card dashboard-jobs-block">
+                        <h3 data-i18n="side_jobs">Online por Job</h3>
+                        <ul id="jobsList" class="jobs-list"></ul>
+                    </section>
+                </section>
+
+                <section class="panel" data-panel="utilities">
+                    <section class="panel-card dashboard-developer-block">
+                        <h3 data-i18n="utilities_title">Utilidades</h3>
+                        <div class="dashboard-actions">
+                            <button id="openCoordsModalBtn" data-requires-permission="copyCoords" type="button" data-i18n="dashboard_get_coords">Copiar Coordenada</button>
+                            <button id="togglePlayerBlipsBtn" data-requires-permission="togglePlayerBlips" type="button" data-i18n="developer_toggle_blips">Ativar/Desativar Blips</button>
+                            <button id="togglePlayerWallBtn" data-requires-permission="togglePlayerWall" type="button" data-i18n="developer_toggle_wall">Ativar/Desativar Wall</button>
+                            <button id="toggleNoclipBtn" data-requires-permission="toggleNoclip" type="button" data-i18n="developer_toggle_noclip">Ativar/Desativar Noclip</button>
+                            <button id="openHorseModalBtnDashboard" data-requires-permission="spawnAdminHorse" type="button" data-i18n="dashboard_spawn_horse">Spawnar Cavalo</button>
+                            <button id="openCompanyStashModalBtn" data-requires-permission="openCompanyStash" type="button" data-i18n="action_open_company_stash">Abrir Bau Empresa</button>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="panel" data-panel="teleports">
+                    <div class="players-search-wrap teleports-toolbar">
+                        <input id="teleportSearchInput" type="search" placeholder="Buscar local..." data-i18n-placeholder="teleports_search_placeholder" />
+                        <select id="teleportCategoryFilter"></select>
+                    </div>
+                    <div class="teleports-actions-row">
+                        <button id="openCustomTeleportModalBtn" data-requires-permission="teleportToCoords" type="button" data-i18n="teleports_custom_button">Teleporte Customizado</button>
+                        <button id="openAddTeleportModalBtn" data-requires-permission="manageTeleportLocations" type="button" data-i18n="teleports_add_button">Adicionar Local</button>
+                    </div>
+                    <div id="teleportsGrid" class="teleports-grid"></div>
+                </section>
+
+                <section class="panel" data-panel="players">
+                    <div class="players-search-wrap">
+                        <input id="searchInput" type="search" placeholder="Buscar por nome, id ou citizenid" data-i18n-placeholder="players_search_placeholder" />
+                    </div>
+                    <div class="table-wrap">
+                        <table class="players-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="players_th_id">ID</th>
+                                    <th data-i18n="players_th_name">Nome</th>
+                                    <th data-i18n="players_th_job">Job</th>
+                                    <th data-i18n="players_th_duty">Duty</th>
+                                    <th data-i18n="players_th_ping">Ping</th>
+                                    <th data-i18n="players_th_status">Status</th>
+                                    <th data-i18n="players_th_freeze">Freeze</th>
+                                    <th data-i18n="players_th_actions">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="playersBody"></tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <section class="panel" data-panel="support">
+                    <div class="support-header">
+                        <h2 data-i18n="support_title">Suporte ao Jogador</h2>
+                        <button id="backToPlayersBtn" type="button" data-i18n="support_back_players">Voltar para Jogadores</button>
+                    </div>
+
+                    <div class="support-grid">
+                        <section class="panel-card support-card support-player-info">
+                            <h3 data-i18n="support_player_info">Informacoes do Jogador</h3>
+                            <div id="selectedInfoGrid" class="info-grid"></div>
+                        </section>
+
+                        <section class="panel-card support-card support-banks">
+                            <h3 data-i18n="support_banks">Bancos</h3>
+                            <div id="banksGrid" class="banks-grid"></div>
+                        </section>
+
+                        <section class="panel-card support-card support-actions">
+                            <h3 data-i18n="support_quick_actions">Acoes Rapidas</h3>
+                            <div class="dashboard-actions">
+                                <button id="supportSpectateBtn" type="button" data-action="spectate" data-requires-permission="spectate" data-i18n="action_spectate">Spectate</button>
+                                <button type="button" data-action="goto" data-requires-permission="goto" data-i18n="action_goto">Ir ate jogador</button>
+                                <button type="button" data-action="bring" data-requires-permission="bring" data-i18n="action_bring">Trazer jogador</button>
+                                <button type="button" data-action="revive" data-requires-permission="revive" data-i18n="action_revive">Reviver</button>
+                                <button type="button" data-action="heal" data-requires-permission="heal" data-i18n="action_heal">Curar</button>
+                                <button type="button" data-action="executeLightning" data-requires-permission="executeLightning" data-i18n="action_execute_lightning">Executar Raio</button>
+                                <button type="button" data-action="toggleFreeze" data-requires-permission="toggleFreeze" data-i18n="action_freeze_toggle">Freeze / Unfreeze</button>
+                                <button type="button" data-action="openInventory" data-requires-permission="openInventory" data-i18n="action_open_inventory">Abrir inventario</button>
+                                <button id="openRenamePlayerModalBtn" data-requires-permission="renameCharacter" type="button" data-i18n="action_rename_player">Trocar Nome / Sobrenome</button>
+                                <button id="openHeightPlayerModalBtn" data-requires-permission="changeHeight" type="button" data-i18n="action_change_height">Alterar Altura</button>
+                                <button id="clearInventoryBtn" data-requires-permission="clearInventory" type="button" data-i18n="action_clear_inventory">Limpar Inventario</button>
+                                <button id="openJobModalBtn" data-requires-permission="setJob upsertMultijobJob" type="button" data-i18n="action_set_job_menu">Setar Job</button>
+                                <button id="removeJobBtn" data-requires-permission="removeJob" type="button" data-i18n="action_remove_job">Remover Job</button>
+                                <button id="openItemModalBtn" data-requires-permission="addItem" type="button" data-i18n="action_add_item_menu">Adicionar Item</button>
+                                <button id="openAddMoneyModalBtn" data-requires-permission="addMoney" type="button" data-i18n="action_add_money_menu">Adicionar Money</button>
+                                <button id="openRemoveMoneyModalBtn" data-requires-permission="removeMoney" type="button" data-i18n="action_remove_money_menu">Remover Money</button>
+                                <button id="openAddWeightModalBtn" data-requires-permission="addWeight" type="button" data-i18n="action_add_weight_menu">Adicionar Peso</button>
+                                <button id="openAddSlotsModalBtn" data-requires-permission="addSlots" type="button" data-i18n="action_add_slots_menu">Adicionar Slots</button>
+                                <button id="openCompanyStashModalBtnSupport" data-requires-permission="openCompanyStash" type="button" data-i18n="action_open_company_stash">Abrir Bau Empresa</button>
+                            </div>
+                        </section>
+
+                        <section class="panel-card support-card support-moderation">
+                            <h3 data-i18n="support_moderation">Comunicacao / Moderacao</h3>
+                            <div class="dashboard-actions">
+                                <button id="openMessageModalBtn" data-requires-permission="privateMessage" type="button" data-i18n="action_private_message">Mensagem Privada</button>
+                                <button id="openKickModalBtn" data-requires-permission="kick" type="button" data-i18n="action_kick_player">Kick Jogador</button>
+                                <button id="openBanModalBtn" data-requires-permission="banPlayer" type="button" data-i18n="action_ban_player">Banir Jogador</button>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="panel" data-panel="bannedPlayers">
+                    <section class="panel-card">
+                        <h2 data-i18n="banned_players_title">Players Banidos</h2>
+                        <div class="table-wrap">
+                            <table class="players-table banned-table">
+                                <thead>
+                                    <tr>
+                                        <th data-i18n="banned_th_id">ID Ban</th>
+                                        <th data-i18n="banned_th_name">Nome</th>
+                                        <th data-i18n="banned_th_license">License</th>
+                                        <th data-i18n="banned_th_reason">Motivo</th>
+                                        <th data-i18n="banned_th_expire">Expira em</th>
+                                        <th data-i18n="banned_th_actions">Acoes</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bannedPlayersBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="panel" data-panel="permissions">
+                    <section class="panel-card permissions-card">
+                        <div class="permissions-head">
+                            <h2 data-i18n="permissions_title">Permissoes do Painel</h2>
+                            <button id="openPermissionAddModalBtn" type="button" data-i18n="permissions_add_btn">Adicionar Permissao</button>
+                        </div>
+                        <div class="permissions-role-block">
+                            <h3 data-i18n="permissions_roles_title">Cargos do Painel</h3>
+                            <div id="permissionPresetList" class="permission-preset-list"></div>
+                        </div>
+                        <div class="permissions-entries-block">
+                            <h3 data-i18n="permissions_entries_title">Players com Permissao</h3>
+                            <div class="table-wrap">
+                                <table class="players-table permissions-table">
+                                    <thead>
+                                        <tr>
+                                            <th data-i18n="permissions_th_player">Player</th>
+                                            <th data-i18n="permissions_th_source">ID</th>
+                                            <th data-i18n="field_citizenid">Citizenid</th>
+                                            <th data-i18n="permissions_th_access">Origem</th>
+                                            <th data-i18n="permissions_th_all">All</th>
+                                            <th data-i18n="permissions_th_manage">Gerenciar</th>
+                                            <th data-i18n="permissions_th_status">Online</th>
+                                            <th data-i18n="permissions_th_actions">Acoes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="permissionsBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+            </section>
+        </div>
+
+        <div id="jobModal" class="modal hidden">
+            <div class="modal-box">
+                <header>
+                    <h3 data-i18n="modal_set_job_title">Setar Job</h3>
+                    <button id="jobModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <input id="jobSearchInput" type="search" placeholder="Buscar job" data-i18n-placeholder="modal_job_search_placeholder" />
+                <div id="jobCurrentInfo" class="helper-note"></div>
+                <div id="jobModalList" class="modal-list"></div>
+                <div class="form-stack">
+                    <label for="jobModalGradeSelect" data-i18n="modal_grade_label">Grade</label>
+                    <select id="jobModalGradeSelect"></select>
+                </div>
+                <div class="form-stack">
+                    <label class="permission-toggle-row" for="jobModalSetActiveInput">
+                        <span data-i18n="modal_job_set_active">Definir como job ativo</span>
+                        <input id="jobModalSetActiveInput" type="checkbox" checked />
+                    </label>
+                </div>
+                <div class="inline-row">
+                    <button id="jobModalMultijobApplyBtn" data-requires-permission="upsertMultijobJob" type="button" data-i18n="modal_apply_multijob">Salvar na Multijob</button>
+                    <button id="jobModalApplyBtn" data-requires-permission="setJob" type="button" data-i18n="modal_apply_job">Aplicar Job no Jogador</button>
+                </div>
+                <div id="jobMultijobInfo" class="helper-note"></div>
+                <div id="jobMultijobList" class="history-list"></div>
+            </div>
+        </div>
+
+        <div id="itemModal" class="modal hidden">
+            <div class="modal-box item-modal-box">
+                <header>
+                    <h3 data-i18n="modal_add_item_title">Adicionar Item</h3>
+                    <button id="itemModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="item-modal-layout">
+                    <aside class="item-modal-sidebar">
+                        <span class="item-modal-sidebar-title" data-i18n="field_category">Categoria</span>
+                        <div id="itemCategoryList" class="item-category-list"></div>
+                    </aside>
+                    <section class="item-modal-main">
+                        <div class="item-modal-toolbar">
+                            <input id="itemSearchInput" type="search" placeholder="Buscar item" data-i18n-placeholder="modal_item_search_placeholder" />
+                            <span id="itemModalCount" class="item-modal-count"></span>
+                        </div>
+                        <div id="itemModalList" class="item-browser-list"></div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <div id="itemConfirmModal" class="modal hidden">
+            <div class="modal-box modal-box-compact">
+                <header>
+                    <h3 data-i18n="modal_item_confirm_title">Confirmar Envio de Itens</h3>
+                    <button id="itemConfirmCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="itemConfirmList" class="confirm-list"></div>
+                <div id="itemCapacityStatus" class="capacity-status"></div>
+                <div class="inline-row">
+                    <button id="itemConfirmCancelBtn" type="button" data-i18n="modal_back">Voltar</button>
+                    <button id="itemConfirmSendBtn" type="button" data-i18n="modal_confirm_send">Confirmar e Enviar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="moneyModal" class="modal hidden">
+            <div class="modal-box modal-box-basic">
+                <header>
+                    <h3 id="moneyModalTitle" data-i18n="modal_add_money_title">Adicionar Money</h3>
+                    <button id="moneyModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+
+                <div class="form-stack">
+                    <div class="selector-card">
+                        <label for="moneyTypeSelect" data-i18n="modal_money_type_label">Tipo de Dinheiro</label>
+                        <select id="moneyTypeSelect"></select>
+                    </div>
+                </div>
+                <div class="form-stack">
+                    <label for="moneyAmountInput" data-i18n="modal_amount_label">Valor</label>
+                    <input id="moneyAmountInput" type="number" min="1" max="100000000" value="1" />
+                </div>
+                <button id="moneyModalApplyBtn" type="button" data-i18n="modal_apply">Aplicar</button>
+            </div>
+        </div>
+
+        <div id="supportAdjustModal" class="modal hidden">
+            <div class="modal-box modal-box-basic">
+                <header>
+                    <h3 id="supportAdjustModalTitle" data-i18n="modal_add_weight_title">Adicionar Peso</h3>
+                    <button id="supportAdjustModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="supportAdjustModalInfo" class="helper-note"></div>
+                <div class="form-stack">
+                    <label for="supportAdjustAmountInput" id="supportAdjustAmountLabel" data-i18n="modal_amount_label">Valor</label>
+                    <input id="supportAdjustAmountInput" type="number" min="1" step="1" value="1" />
+                </div>
+                <button id="supportAdjustModalApplyBtn" type="button" data-i18n="modal_apply">Aplicar</button>
+            </div>
+        </div>
+
+        <div id="renamePlayerModal" class="modal hidden">
+            <div class="modal-box modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_rename_player_title">Trocar Nome / Sobrenome</h3>
+                    <button id="renamePlayerModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="renamePlayerModalInfo" class="helper-note"></div>
+                <div class="form-stack">
+                    <label for="renamePlayerFirstNameInput" data-i18n="modal_first_name_label">Nome</label>
+                    <input id="renamePlayerFirstNameInput" type="text" maxlength="48" placeholder="Digite o novo nome" data-i18n-placeholder="modal_first_name_placeholder" />
+                </div>
+                <div class="form-stack">
+                    <label for="renamePlayerLastNameInput" data-i18n="modal_last_name_label">Sobrenome</label>
+                    <input id="renamePlayerLastNameInput" type="text" maxlength="48" placeholder="Digite o novo sobrenome" data-i18n-placeholder="modal_last_name_placeholder" />
+                </div>
+                <button id="renamePlayerModalApplyBtn" type="button" data-i18n="modal_rename_player_apply">Salvar e Kickar</button>
+            </div>
+        </div>
+
+        <div id="heightPlayerModal" class="modal hidden">
+            <div class="modal-box modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_change_height_title">Alterar Altura</h3>
+                    <button id="heightPlayerModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="heightPlayerModalInfo" class="helper-note"></div>
+                <div class="form-stack">
+                    <label data-i18n="modal_height_preset_label">Altura Padrao</label>
+                    <div id="heightPlayerPresetGrid" class="height-preset-grid"></div>
+                </div>
+                <div class="form-stack">
+                    <label for="heightPlayerCustomInput" data-i18n="modal_height_custom_label">Altura Personalizada</label>
+                    <input id="heightPlayerCustomInput" type="number" step="0.1" value="100" placeholder="Digite qualquer numero" data-i18n-placeholder="modal_height_custom_placeholder" />
+                </div>
+                <button id="heightPlayerModalApplyBtn" type="button" data-i18n="modal_change_height_apply">Salvar e Kickar</button>
+            </div>
+        </div>
+
+        <div id="coordsModal" class="modal hidden">
+            <div class="modal-box modal-box-basic coords-modal-box">
+                <header>
+                    <h3 data-i18n="modal_coords_title">Pegar Coordenadas</h3>
+                    <button id="coordsModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="coordsModalGrid" class="coords-grid">
+                    <div class="coords-row">
+                        <label data-i18n="modal_coords_vector1">Vector1</label>
+                        <div class="coords-copy-group">
+                            <button id="coordsVector1Input" type="button" class="coords-copy-btn" data-coords-copy-field="vector1">-</button>
+                        </div>
+                    </div>
+                    <div class="coords-row">
+                        <label data-i18n="modal_coords_vector2">Vector2</label>
+                        <div class="coords-copy-group">
+                            <button id="coordsVector2Input" type="button" class="coords-copy-btn" data-coords-copy-field="vector2">-</button>
+                        </div>
+                    </div>
+                    <div class="coords-row">
+                        <label data-i18n="modal_coords_vector3">Vector3</label>
+                        <div class="coords-copy-group">
+                            <button id="coordsVector3Input" type="button" class="coords-copy-btn" data-coords-copy-field="vector3">-</button>
+                        </div>
+                    </div>
+                    <div class="coords-row">
+                        <label data-i18n="modal_coords_vector4">Vector4</label>
+                        <div class="coords-copy-group">
+                            <button id="coordsVector4Input" type="button" class="coords-copy-btn" data-coords-copy-field="vector4">-</button>
+                        </div>
+                    </div>
+                    <div class="coords-row">
+                        <label data-i18n="modal_coords_heading">Heading</label>
+                        <div class="coords-copy-group">
+                            <button id="coordsHeadingInput" type="button" class="coords-copy-btn" data-coords-copy-field="heading">-</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="customTeleportModal" class="modal hidden">
+            <div class="modal-box modal-box-basic coords-modal-box">
+                <header>
+                    <h3 data-i18n="modal_custom_teleport_title">Teleporte Customizado</h3>
+                    <button id="customTeleportModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="form-stack">
+                    <label for="customTeleportXInput" data-i18n="modal_coords_x_label">X</label>
+                    <input id="customTeleportXInput" type="number" step="0.1" />
+                </div>
+                <div class="form-stack">
+                    <label for="customTeleportYInput" data-i18n="modal_coords_y_label">Y</label>
+                    <input id="customTeleportYInput" type="number" step="0.1" />
+                </div>
+                <div class="form-stack">
+                    <label for="customTeleportZInput" data-i18n="modal_coords_z_label">Z</label>
+                    <input id="customTeleportZInput" type="number" step="0.1" />
+                </div>
+                <div class="form-stack">
+                    <label for="customTeleportHeadingInput" data-i18n="modal_coords_heading_label">Heading (opcional)</label>
+                    <input id="customTeleportHeadingInput" type="number" step="1" value="0" />
+                </div>
+                <button id="customTeleportModalApplyBtn" type="button" data-i18n="modal_teleport_apply">Teleportar</button>
+            </div>
+        </div>
+
+        <div id="addTeleportModal" class="modal hidden">
+            <div class="modal-box modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_add_teleport_title">Adicionar Local</h3>
+                    <button id="addTeleportModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="form-stack">
+                    <label for="addTeleportNameInput" data-i18n="modal_teleport_name_label">Nome</label>
+                    <input id="addTeleportNameInput" type="text" maxlength="100" placeholder="Ex: Loja Custom" data-i18n-placeholder="modal_teleport_name_placeholder" />
+                </div>
+                <div class="selector-card">
+                    <label for="addTeleportCategorySelect" data-i18n="modal_teleport_category_label">Categoria</label>
+                    <select id="addTeleportCategorySelect"></select>
+                </div>
+                <div class="form-stack">
+                    <label for="addTeleportDescriptionInput" data-i18n="modal_teleport_description_label">Descricao (opcional)</label>
+                    <input id="addTeleportDescriptionInput" type="text" maxlength="255" />
+                </div>
+                <button id="addTeleportUseCurrentBtn" type="button" data-i18n="modal_teleport_use_current">Usar Localizacao Atual</button>
+                <div class="form-stack">
+                    <label for="addTeleportXInput" data-i18n="modal_coords_x_label">X</label>
+                    <input id="addTeleportXInput" type="number" step="0.1" />
+                </div>
+                <div class="form-stack">
+                    <label for="addTeleportYInput" data-i18n="modal_coords_y_label">Y</label>
+                    <input id="addTeleportYInput" type="number" step="0.1" />
+                </div>
+                <div class="form-stack">
+                    <label for="addTeleportZInput" data-i18n="modal_coords_z_label">Z</label>
+                    <input id="addTeleportZInput" type="number" step="0.1" />
+                </div>
+                <div class="form-stack">
+                    <label for="addTeleportHeadingInput" data-i18n="modal_coords_heading_label">Heading (opcional)</label>
+                    <input id="addTeleportHeadingInput" type="number" step="1" value="0" />
+                </div>
+                <button id="addTeleportModalApplyBtn" type="button" data-i18n="modal_teleport_add_apply">Adicionar Local</button>
+            </div>
+        </div>
+
+        <div id="horseModal" class="modal hidden">
+            <div class="modal-box horse-modal-box">
+                <header>
+                    <h3 data-i18n="modal_horse_title">Spawnar Cavalo</h3>
+                    <button id="horseModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="horseModalCurrentInfo" class="helper-note"></div>
+                <div id="horseModalList" class="modal-list horse-list"></div>
+                <button id="horseModalSpawnBtn" type="button" data-i18n="modal_horse_spawn">Spawnar Cavalo Selecionado</button>
+            </div>
+        </div>
+
+        <div id="messageModal" class="modal hidden">
+            <div class="modal-box modal-box-compact modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_private_message_title">Mensagem Privada</h3>
+                    <button id="messageModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="form-stack">
+                    <label for="messageModalInput" data-i18n="modal_message_label">Mensagem</label>
+                    <textarea id="messageModalInput" maxlength="300" rows="5" placeholder="Digite a mensagem para o jogador" data-i18n-placeholder="modal_message_placeholder"></textarea>
+                </div>
+                <button id="messageModalSendBtn" type="button" data-i18n="modal_send_message">Enviar Mensagem</button>
+            </div>
+        </div>
+
+        <div id="kickModal" class="modal hidden">
+            <div class="modal-box modal-box-compact modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_kick_title">Kick Jogador</h3>
+                    <button id="kickModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="form-stack">
+                    <label for="kickModalReason" data-i18n="modal_reason_label">Motivo</label>
+                    <textarea id="kickModalReason" maxlength="180" rows="4" placeholder="Motivo do kick" data-i18n-placeholder="modal_kick_reason_placeholder"></textarea>
+                </div>
+                <button id="kickModalApplyBtn" type="button" data-i18n="modal_apply_kick">Aplicar Kick</button>
+            </div>
+        </div>
+
+        <div id="banModal" class="modal hidden">
+            <div class="modal-box modal-box-compact modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_ban_title">Banir Jogador</h3>
+                    <button id="banModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="form-stack">
+                    <label data-i18n="modal_ban_type_label">Tipo</label>
+                    <div id="banModalTypeLabel" class="ban-modal-note">-</div>
+                </div>
+                <div class="form-stack">
+                    <label data-i18n="modal_ban_summary_label">Resumo</label>
+                    <div id="banModalSummary" class="ban-modal-note">-</div>
+                </div>
+                <div class="form-stack">
+                    <label for="banModeSelect" data-i18n="modal_ban_mode_label">Modalidade</label>
+                    <select id="banModeSelect"></select>
+                </div>
+                <div class="form-stack">
+                    <label for="banReasonInput" data-i18n="modal_reason_label">Motivo</label>
+                    <textarea id="banReasonInput" maxlength="220" rows="4" placeholder="Motivo do banimento" data-i18n-placeholder="modal_ban_reason_placeholder"></textarea>
+                </div>
+                <button id="banModalApplyBtn" type="button" data-i18n="modal_confirm_ban">Confirmar Banimento</button>
+            </div>
+        </div>
+
+        <div id="editBanModal" class="modal hidden">
+            <div class="modal-box modal-box-compact modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_edit_ban_title">Editar Banimento</h3>
+                    <button id="editBanModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="editBanCurrentInfo" class="helper-note">N/A</div>
+                <div class="form-stack">
+                    <label for="editBanModeSelect" data-i18n="modal_ban_extend_mode_label">Acrescentar Duracao</label>
+                    <select id="editBanModeSelect"></select>
+                </div>
+                <button id="editBanModalApplyBtn" type="button" data-i18n="modal_apply_ban_edit">Salvar Alteracao</button>
+            </div>
+        </div>
+
+        <div id="removeJobConfirmModal" class="modal hidden">
+            <div class="modal-box remove-job-modal-box">
+                <header>
+                    <h3 data-i18n="modal_remove_job_confirm_title">Confirmar Remocao de Job</h3>
+                    <button id="removeJobConfirmCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="removeJobCurrentInfo" class="helper-note remove-job-current">Job atual: N/A</div>
+                <div id="removeJobModalList" class="modal-list"></div>
+                <div id="removeJobModalHint" class="helper-note"></div>
+                <div class="remove-job-actions">
+                    <button id="removeJobCancelBtn" type="button" data-i18n="modal_back">Voltar</button>
+                    <button id="removeJobConfirmBtn" type="button" data-i18n="modal_confirm_remove">Confirmar Remocao</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="companyStashModal" class="modal hidden">
+            <div class="modal-box modal-box-basic">
+                <header>
+                    <h3 data-i18n="modal_company_stash_title">Baus de Empresas</h3>
+                    <button id="companyStashModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <input id="companyStashSearchInput" type="search" placeholder="Buscar bau por label/job" data-i18n-placeholder="modal_company_stash_search_placeholder" />
+                <div id="companyStashCurrentInfo" class="helper-note"></div>
+                <div id="companyStashModalList" class="modal-list"></div>
+                <button id="companyStashModalOpenBtn" type="button" data-i18n="modal_company_stash_open">Abrir Bau Selecionado</button>
+            </div>
+        </div>
+
+        <div id="permissionAddModal" class="modal hidden">
+            <div class="modal-box permission-modal-box">
+                <header>
+                    <h3 data-i18n="permissions_add_modal_title">Adicionar Permissao</h3>
+                    <button id="permissionAddModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="permission-modal-body permission-modal-body-add">
+                    <section class="panel-card permission-online-card">
+                        <h4 class="permission-section-title" data-i18n="permissions_online_title">Players Online</h4>
+                        <div id="permissionAddSelectedInfo" class="helper-note permission-helper-note"></div>
+                        <div id="permissionAddOnlineList" class="permission-online-list"></div>
+                    </section>
+                    <section class="panel-card permission-check-card">
+                        <div class="form-stack">
+                            <label for="permissionAddPresetSelect" data-i18n="permissions_role_label">Cargo</label>
+                            <div class="helper-note permission-role-copy" data-i18n="permissions_role_picker_title">Escolha o cargo que este player tera no painel.</div>
+                            <select id="permissionAddPresetSelect"></select>
+                            <div class="helper-note permission-role-copy" data-i18n="permissions_role_picker_desc">As permissoes serao aplicadas automaticamente conforme o cargo selecionado.</div>
+                        </div>
+                        <h4 class="permission-section-title" data-i18n="permissions_options_title">Permissoes Disponiveis</h4>
+                        <label class="permission-toggle-row" for="permissionAddAllInput">
+                            <span data-i18n="permissions_all_toggle">All Permissao</span>
+                            <input id="permissionAddAllInput" type="checkbox" />
+                        </label>
+                        <div id="permissionAddOptions" class="permission-check-grid"></div>
+                    </section>
+                </div>
+                <div class="permission-modal-footer permissions-inline-row">
+                    <button id="permissionAddCancelBtn" type="button" data-i18n="modal_back">Voltar</button>
+                    <button id="permissionAddConfirmBtn" type="button" data-i18n="permissions_add_confirm">Adicionar Permissao</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="permissionEditModal" class="modal hidden">
+            <div class="modal-box modal-box-basic permission-modal-box">
+                <header>
+                    <h3 data-i18n="permissions_edit_modal_title">Editar Permissao</h3>
+                    <button id="permissionEditModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div class="permission-modal-body permission-modal-body-edit">
+                    <div id="permissionEditTargetInfo" class="helper-note permission-helper-note"></div>
+                    <section class="selector-card permission-check-card">
+                        <div class="form-stack">
+                            <label for="permissionEditPresetSelect" data-i18n="permissions_role_label">Cargo</label>
+                            <div class="helper-note permission-role-copy" data-i18n="permissions_role_picker_title">Escolha o cargo que este player tera no painel.</div>
+                            <select id="permissionEditPresetSelect"></select>
+                            <div class="helper-note permission-role-copy" data-i18n="permissions_role_picker_desc">As permissoes serao aplicadas automaticamente conforme o cargo selecionado.</div>
+                        </div>
+                        <h4 class="permission-section-title" data-i18n="permissions_options_title">Permissoes Disponiveis</h4>
+                        <label class="permission-toggle-row" for="permissionEditAllInput">
+                            <span data-i18n="permissions_all_toggle">All Permissao</span>
+                            <input id="permissionEditAllInput" type="checkbox" />
+                        </label>
+                        <div id="permissionEditOptions" class="permission-check-grid"></div>
+                    </section>
+                </div>
+                <div class="permission-modal-footer permission-edit-actions">
+                    <button id="permissionEditSaveBtn" type="button" data-i18n="permissions_save_btn">Salvar Permissao</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="permissionRemoveConfirmModal" class="modal hidden">
+            <div class="modal-box modal-box-compact remove-job-modal-box">
+                <header>
+                    <h3 data-i18n="permissions_remove_modal_title">Confirmar Remocao de Permissao</h3>
+                    <button id="permissionRemoveConfirmCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="permissionRemoveConfirmCurrentInfo" class="helper-note remove-job-current"></div>
+                <div class="remove-job-actions">
+                    <button id="permissionRemoveConfirmCancelBtn" type="button" data-i18n="modal_back">Voltar</button>
+                    <button id="permissionRemoveConfirmBtn" type="button" class="danger" data-i18n="modal_confirm_remove">Confirmar Remocao</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="permissionPresetEditModal" class="modal hidden">
+            <div class="modal-box modal-box-basic permission-modal-box">
+                <header>
+                    <h3 data-i18n="permissions_role_edit_title">Editar Cargo</h3>
+                    <button id="permissionPresetEditModalCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <div id="permissionPresetEditTargetInfo" class="helper-note permission-helper-note"></div>
+                <section class="selector-card permission-check-card">
+                    <h4 class="permission-section-title" data-i18n="permissions_options_title">Permissoes Disponiveis</h4>
+                    <label class="permission-toggle-row" for="permissionPresetEditAllInput">
+                        <span data-i18n="permissions_all_toggle">All Permissao</span>
+                        <input id="permissionPresetEditAllInput" type="checkbox" />
+                    </label>
+                    <div id="permissionPresetEditOptions" class="permission-check-grid"></div>
+                </section>
+                <div class="permission-modal-footer permission-edit-actions">
+                    <button id="permissionPresetEditSaveBtn" type="button" data-i18n="permissions_role_save_btn">Salvar Cargo</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="criticalConfirmModal" class="modal hidden">
+            <div id="criticalConfirmModalBox" class="modal-box modal-box-basic critical-confirm-modal-box" data-variant="default">
+                <header class="critical-confirm-header">
+                    <div class="critical-confirm-headline">
+                        <span id="criticalConfirmBadge" class="critical-confirm-badge hidden">ACTION</span>
+                        <h3 id="criticalConfirmTitle">Confirmacao Critica</h3>
+                    </div>
+                    <button id="criticalConfirmCloseBtn" type="button" class="danger" data-i18n="modal_close">Fechar</button>
+                </header>
+                <p id="criticalConfirmSummary" class="critical-confirm-summary"></p>
+                <ul id="criticalConfirmDetails" class="critical-confirm-details"></ul>
+                <div class="inline-row">
+                    <button id="criticalConfirmCancelBtn" type="button">Cancelar</button>
+                    <button id="criticalConfirmBtn" type="button" class="danger" disabled>Confirmar</button>
+                </div>
+            </div>
+        </div>
+
+        <aside id="itemQueueDock" class="queue-block queue-panel queue-dock hidden">
+            <div id="itemQueueList" class="item-queue-list"></div>
+            <div id="itemQueueWeightTotal" class="queue-total-weight">KG total da lista: 0,00 KG</div>
+            <div class="queue-footer">
+                <button id="itemQueueClearBtn" type="button" data-i18n="queue_clear">Limpar</button>
+                <button id="itemQueueConfirmBtn" type="button" data-i18n="queue_confirm">Confirmar</button>
+            </div>
+        </aside>
+    </main>
+    <section id="toastStack" class="toast-stack" aria-live="polite" aria-atomic="false"></section>
+
+    <script src="script.js"></script>
+</body>
+</html>
