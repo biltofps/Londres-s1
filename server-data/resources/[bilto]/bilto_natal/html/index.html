@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rye&family=Barlow+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+    /* mesmo visual do rsg-inventory (couro + latao) */
+    :root {
+        --leather: #1b130c;
+        --leather-2: #2b1e13;
+        --brass: #d1a85e;
+        --brass-dim: #8c6c3a;
+        --brass-line: rgba(209, 168, 94, 0.45);
+        --brass-soft: rgba(209, 168, 94, 0.14);
+        --cream: #f3e8cf;
+        --muted: #b3a283;
+        --green: #93b85c;
+        --shadow: rgba(0, 0, 0, 0.55);
+        --font-title: "Rye", "Georgia", serif;
+        --font-body: "Barlow Condensed", "Segoe UI", sans-serif;
+        /* tamanhos base pensados para 1920x1080; o script ajusta --ui-scale pela resolucao */
+        --ui-scale: 1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; font-family: var(--font-body); color: var(--cream); }
+    .hidden { display: none !important; }
+
+    .panel {
+        border-radius: 12px;
+        background:
+            radial-gradient(120% 80% at 0% 0%, rgba(209, 168, 94, 0.12), transparent 60%),
+            radial-gradient(100% 70% at 100% 100%, rgba(0, 0, 0, 0.45), transparent 70%),
+            repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 6px),
+            linear-gradient(160deg, var(--leather-2), var(--leather));
+        border: 1px solid var(--brass-line);
+        box-shadow:
+            0 18px 44px var(--shadow),
+            inset 0 1px 0 rgba(255, 255, 255, 0.05),
+            inset 0 0 0 5px rgba(0, 0, 0, 0.25),
+            inset 0 0 0 6px rgba(209, 168, 94, 0.18);
+    }
+    .title { font-family: var(--font-title); font-weight: 400; font-size: 20px; line-height: 1.15; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+    .subtitle { margin-top: 3px; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--brass); }
+    .divider { display: flex; align-items: center; gap: 10px; margin: 8px 0; color: var(--brass-dim); font-size: 12px; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; }
+    .divider::before { background: linear-gradient(90deg, transparent, var(--brass-dim)); }
+    .divider::after  { background: linear-gradient(90deg, var(--brass-dim), transparent); }
+
+    /* ---------- anuncio (pequeno, no topo) ---------- */
+    #announce {
+        position: fixed; top: calc(36px * var(--ui-scale)); left: 50%;
+        width: 380px; padding: 14px 20px 14px; text-align: center;
+        transform: translate(-50%, -12px) scale(var(--ui-scale)); transform-origin: top center;
+        opacity: 0; transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        pointer-events: none;
+    }
+    #announce.show { opacity: 1; transform: translate(-50%, 0) scale(var(--ui-scale)); }
+    #a-text { font-size: 15px; color: var(--muted); line-height: 1.3; }
+    #a-count {
+        margin: 8px auto 2px; width: 56px; height: 56px; border-radius: 50%;
+        display: grid; place-items: center;
+        background: radial-gradient(circle at 35% 30%, #3a2a1b, var(--leather));
+        border: 2px solid var(--brass);
+        box-shadow: 0 0 0 3px rgba(209, 168, 94, 0.12), inset 0 2px 8px rgba(0, 0, 0, 0.6);
+        font-family: var(--font-title); font-size: 26px; color: var(--brass);
+    }
+    #a-count.pop { animation: pop 0.6s ease-out; }
+    @keyframes pop { from { transform: scale(1.35); opacity: 0.4; } to { transform: scale(1); opacity: 1; } }
+
+    /* ---------- ranking ---------- */
+    #ranking-wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    #ranking { width: 400px; padding: 20px 20px 18px; transform: scale(var(--ui-scale)); animation: fadeIn 0.2s ease; }
+    #ranking header { text-align: center; }
+    .rank-list {
+        list-style: none; padding: 6px; border-radius: 10px;
+        background: rgba(0, 0, 0, 0.28); border: 1px solid var(--brass-soft);
+    }
+    .rank-list li {
+        display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px;
+        font-size: 16px; font-weight: 600;
+    }
+    .rank-list li + li { margin-top: 3px; }
+    .rank-list li:nth-child(odd) { background: rgba(255, 255, 255, 0.025); }
+    .rank-list .pos { width: 24px; font-weight: 700; color: var(--brass); }
+    .rank-list li:nth-child(1) .pos, .rank-list li:nth-child(1) .name { color: #f0c860; }
+    .rank-list .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rank-list .pts { color: var(--green); font-weight: 700; }
+    .rank-empty { padding: 22px 0; text-align: center; font-size: 15px; font-style: italic; color: var(--muted); }
+    .me {
+        margin-top: 10px; height: 34px; padding: 0 12px; border-radius: 8px;
+        display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700;
+        background: rgba(209, 168, 94, 0.07); border: 1px solid rgba(209, 168, 94, 0.28);
+    }
+    .me span { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--brass); }
+    .me b { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .me .pts { font-size: 16px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--green); }
+    .actions { display: flex; margin-top: 14px; }
+    .wood-btn {
+        flex: 1; padding: 9px 12px; cursor: pointer;
+        background: rgba(0, 0, 0, 0.28); border: 1px solid var(--brass-line); border-radius: 999px; color: var(--muted);
+        font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .wood-btn:hover { color: var(--cream); filter: brightness(1.12); }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<div id="announce" class="panel">
+    <div class="title" id="a-title"></div>
+    <div class="divider"><span>&#10022;</span></div>
+    <div id="a-text"></div>
+    <div id="a-count" class="hidden"></div>
+</div>
+
+<div id="ranking-wrap" class="hidden">
+    <section id="ranking" class="panel">
+        <header>
+            <div class="title" id="r-title"></div>
+            <div class="subtitle" id="r-status"></div>
+        </header>
+        <div class="divider"><span>&#10022;</span></div>
+        <ol class="rank-list" id="r-list"></ol>
+        <div class="me" id="r-me"></div>
+        <div class="actions"><button class="wood-btn" id="r-close">Fechar</button></div>
+    </section>
+</div>
+
+<script>
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function applyScale() {
+        const fit = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+        document.documentElement.style.setProperty('--ui-scale', Math.max(0.55, Math.min(2.5, fit)).toFixed(3));
+    }
+    window.addEventListener('resize', applyScale);
+    applyScale();
+
+    let hideTimer, countTimer, audio;
+
+    function playSound(snd) {
+        if (!snd || !snd.file) return;
+        if (audio) audio.pause();
+        audio = new Audio(`sounds/${snd.file}`);
+        audio.volume = snd.volume ?? 0.5;
+        audio.play().catch(() => {});
+    }
+
+    function announce(d) {
+        clearTimeout(hideTimer); clearInterval(countTimer);
+        $('a-title').textContent = d.title || '';
+        $('a-text').textContent = d.text || '';
+        const count = $('a-count');
+        count.classList.toggle('hidden', !d.countdown);
+        $('announce').classList.add('show');
+
+        let ms = d.duration || 6000;
+        if (d.countdown) {
+            let n = d.countdown;
+            const tick = () => {
+                count.textContent = n--;
+                count.classList.remove('pop'); void count.offsetWidth; count.classList.add('pop');
+            };
+            tick();
+            countTimer = setInterval(() => { if (n <= 0) return clearInterval(countTimer); tick(); }, 1000);
+            ms = d.countdown * 1000 + 300;
+            playSound(d.sound);
+        }
+        hideTimer = setTimeout(() => $('announce').classList.remove('show'), ms);
+    }
+
+    function ranking(title, d) {
+        $('r-title').textContent = title;
+        $('r-status').textContent = d.active ? `Rodada acontecendo: ${d.left} presente(s) no mapa` : 'Nenhuma rodada acontecendo agora';
+        $('r-list').innerHTML = d.top.length
+            ? d.top.map((r, i) => `<li><span class="pos">${i + 1}.</span><span class="name">${esc(r.name)}</span><span class="pts">${r.points} pts</span></li>`).join('')
+            : '<div class="rank-empty">Ninguem pontuou ainda.</div>';
+        const me = d.me;
+        $('r-me').innerHTML = `<span>Voce</span><b>${me.pos ? me.pos + '. ' : ''}${esc(me.name)}</b><span class="pts">${me.points} pts</span>`;
+        $('ranking-wrap').classList.remove('hidden');
+    }
+
+    function closeRanking() {
+        if ($('ranking-wrap').classList.contains('hidden')) return;
+        $('ranking-wrap').classList.add('hidden');
+        fetch(`https://${GetParentResourceName()}/close`, { method: 'POST', body: '{}' });
+    }
+
+    $('r-close').addEventListener('click', closeRanking);
+    window.addEventListener('message', e => {
+        const d = e.data;
+        if (d.action === 'announce') announce(d);
+        else if (d.action === 'ranking') ranking(d.title, d.data);
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'Backspace') closeRanking(); });
+</script>
+</body>
+</html>
