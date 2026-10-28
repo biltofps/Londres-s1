@@ -142,6 +142,11 @@ function RSGCore.Player.CheckPlayerData(source, PlayerData)
 
     applyDefaults(PlayerData, RSGCore.Config.Player.PlayerDefaults)
 
+    -- characters created before a money type was added don't have it yet
+    for moneytype in pairs(RSGCore.Config.Money.MoneyTypes) do
+        if PlayerData.money[moneytype] == nil then PlayerData.money[moneytype] = 0 end
+    end
+
     if GetResourceState('rsg-inventory') ~= 'missing' then
         PlayerData.items = exports['rsg-inventory']:LoadInventory(PlayerData.source, PlayerData.citizenid)
     end

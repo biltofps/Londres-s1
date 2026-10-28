@@ -385,15 +385,9 @@ local function notifyPaycheck(src, title, notifyType)
     TriggerClientEvent('ox_lib:notify', src, { title = title, type = notifyType, duration = 5000 })
 end
 
----Pays into the player's rsg-banking home branch. Falls back to cash if they have no home branch yet.
+---Pays into the 'bank' money type (Saint Denis Bank in rsg-banking).
 local function payWage(Player, payment)
-    if GetResourceState('rsg-banking') == 'started' then
-        local ok, branch = pcall(function()
-            return exports['rsg-banking']:AddHomeMoney(Player.PlayerData.citizenid, payment, 'Paycheck')
-        end)
-        if ok and branch then return true end
-    end
-    return Player.Functions.AddMoney('cash', payment, 'paycheck')
+    return Player.Functions.AddMoney('bank', payment, 'paycheck')
 end
 
 function PaycheckInterval()
@@ -409,7 +403,7 @@ function PaycheckInterval()
 
         if jobInfo and payment > 0 and (jobInfo.offDutyPay or job.onduty) then
             if RSGCore.Config.Money.PayCheckSociety then
-                print('^3[rsg-core] PayCheckSociety is not supported with rsg-banking v3 - paying normally^7')
+                print('^3[rsg-core] PayCheckSociety is not supported with rsg-banking - paying normally^7')
             end
             if payWage(Player, payment) then
                 notifyPaycheck(src, locale('info.received_paycheck', payment), 'inform')
