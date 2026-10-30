@@ -45,3 +45,8 @@ dependencies {
     'rsg-multijob'
 }
 
+escrow_ignore {
+    'config.lua',
+    'locale.lua'
+}
+
